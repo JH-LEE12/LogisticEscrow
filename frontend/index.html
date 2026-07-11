@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LogisticsEscrow — Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.umd.min.js"></script>
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="brand">Logistics<span>Escrow</span></div>
+    <nav class="tabs">
+      <a href="index.html" class="active">Dashboard</a>
+      <a href="create.html">Create Agreement</a>
+      <a href="milestones.html">Milestones</a>
+      <a href="history.html">History</a>
+    </nav>
+    <div class="wallet-box">
+      <span id="walletAddress" class="wallet-address" style="display:none;"></span>
+      <button id="connectBtn">Connect Wallet</button>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- Registration card: only shown if the connected wallet hasn't registered yet -->
+    <section class="card" id="registerCard" style="display:none;">
+      <h2>Register your role</h2>
+      <p class="hint">Choose whether this wallet acts as a Shipper (creates and funds agreements) or a Carrier (delivers and gets paid). This can only be set once per wallet.</p>
+      <div class="register-options">
+        <button id="registerShipperBtn">Register as Shipper</button>
+        <button id="registerCarrierBtn" class="secondary">Register as Carrier</button>
+      </div>
+    </section>
+
+    <!-- Status card: shown once connected, regardless of registration -->
+    <section class="card" id="statusCard" style="display:none;">
+      <h2>Your account</h2>
+      <p>
+        Role:
+        <span id="roleBadge" class="role-badge">Not registered</span>
+      </p>
+    </section>
+
+    <!-- Agreements list -->
+    <section class="card" id="agreementsCard" style="display:none;">
+      <h2>My Agreements</h2>
+      <div id="agreementsContainer">
+        <p class="empty-state">Loading...</p>
+      </div>
+    </section>
+
+    <!-- Shown before wallet connects -->
+    <section class="card" id="connectPrompt">
+      <h2>Welcome</h2>
+      <p>Connect your MetaMask wallet to register as a Shipper or Carrier, and view your logistics agreements.</p>
+    </section>
+
+  </main>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+  <script>
+    const connectBtn = document.getElementById("connectBtn");
+    const walletAddressEl = document.getElementById("walletAddress");
+    const connectPrompt = document.getElementById("connectPrompt");
+    const registerCard = document.getElementById("registerCard");
+    const statusCard = document.getElementById("statusCard");
+    const agreementsCard = document.getElementById("agreementsCard");
+    const roleBadge = document.getElementById("roleBadge");
+    const agreementsContainer = document.getElementById("agreementsContainer");
+
+    function shortenAddress(addr) {
+      return addr.slice(0, 6) + "..." + addr.slice(-4);
+    }
+
+    function renderRoleBadge(roleCode) {
+      roleBadge.textContent = ROLE_LABEL[roleCode];
+      roleBadge.className = "role-badge";
+      if (roleCode === ROLE.SHIPPER) roleBadge.classList.add("shipper");
+      if (roleCode === ROLE.CARRIER) roleBadge.classList.add("carrier");
+    }
+
+    function renderAgreements(agreements) {
+      if (agreements.length === 0) {
+        agreementsContainer.innerHTML = '<p class="empty-state">No agreements yet. Shippers can create one from the "Create Agreement" tab.</p>';
+        return;
+      }
+
+      const rows = agreements.map(a => `
+        <tr>
+          <td>#${a.id}</td>
+          <td>${shortenAddress(a.shipper)}</td>
+          <td>${shortenAddress(a.carrier)}</td>
+          <td>${a.payloadValueEth} ETH</td>
+          <td>${a.milestoneCount}</td>
+          <td>${a.deadline.toLocaleDateString()}</td>
+          <td><span class="status-pill status-${a.statusLabel.replace(/\s/g, "")}">${a.statusLabel}</span></td>
+        </tr>
+      `).join("");
+
+      agreementsContainer.innerHTML = `
+        <table class="agreements">
+          <thead>
+            <tr>
+              <th>ID</th><th>Shipper</th><th>Carrier</th><th>Value</th>
+              <th>Milestones</th><th>Deadline</th><th>Status</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    }
+
+    async function refreshDashboard() {
+      const account = getCurrentAccount();
+      if (!account) return;
+
+      walletAddressEl.textContent = shortenAddress(account);
+      walletAddressEl.style.display = "inline-block";
+      connectBtn.textContent = "Connected";
+      connectBtn.disabled = true;
+      connectPrompt.style.display = "none";
+      statusCard.style.display = "block";
+      agreementsCard.style.display = "block";
+
+      const roleCode = await getUserRole(account);
+      renderRoleBadge(roleCode);
+
+      registerCard.style.display = roleCode === ROLE.NONE ? "block" : "none";
+
+      agreementsContainer.innerHTML = '<p class="empty-state">Loading...</p>';
+      const mine = await getMyAgreements(account);
+      renderAgreements(mine);
+    }
+
+    connectBtn.addEventListener("click", async () => {
+      const account = await connectWallet();
+      if (account) await refreshDashboard();
+    });
+
+    document.getElementById("registerShipperBtn").addEventListener("click", async () => {
+      await registerUser(ROLE.SHIPPER);
+      await refreshDashboard();
+    });
+
+    document.getElementById("registerCarrierBtn").addEventListener("click", async () => {
+      await registerUser(ROLE.CARRIER);
+      await refreshDashboard();
+    });
+
+    // Auto-reconnect on page load if MetaMask already trusts this site.
+    window.addEventListener("DOMContentLoaded", async () => {
+      const account = await restoreSession();
+      if (account) await refreshDashboard();
+    });
+  </script>
+
+</body>
+</html>

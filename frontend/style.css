@@ -1,0 +1,203 @@
+/* style.css — shared styling for the whole dApp.
+   Written by Member 1 as a starting point; other members can extend it
+   for their own pages (create.html, milestones.html, history.html)
+   using the same CSS variables so the app looks consistent. */
+
+:root {
+  --color-navy: #10233d;
+  --color-navy-light: #1c3a5e;
+  --color-steel: #4d6a85;
+  --color-mist: #eef2f6;
+  --color-amber: #e0a325;
+  --color-green: #2f8f5b;
+  --color-red: #c14343;
+  --color-white: #ffffff;
+
+  --font-body: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "Consolas", "SFMono-Regular", monospace;
+
+  --radius: 8px;
+  --shadow: 0 2px 8px rgba(16, 35, 61, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  background: var(--color-mist);
+  color: var(--color-navy);
+}
+
+header.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 32px;
+  background: var(--color-navy);
+  color: var(--color-white);
+}
+
+header.topbar .brand {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+header.topbar .brand span {
+  color: var(--color-amber);
+}
+
+nav.tabs {
+  display: flex;
+  gap: 24px;
+}
+
+nav.tabs a {
+  color: var(--color-mist);
+  text-decoration: none;
+  font-size: 0.9rem;
+  padding: 6px 0;
+  border-bottom: 2px solid transparent;
+}
+
+nav.tabs a.active,
+nav.tabs a:hover {
+  color: var(--color-white);
+  border-bottom-color: var(--color-amber);
+}
+
+.wallet-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.wallet-address {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  background: var(--color-navy-light);
+  padding: 6px 12px;
+  border-radius: var(--radius);
+}
+
+button {
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 10px 18px;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  background: var(--color-amber);
+  color: var(--color-navy);
+  transition: filter 0.15s ease;
+}
+
+button:hover {
+  filter: brightness(1.08);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button.secondary {
+  background: var(--color-white);
+  color: var(--color-navy);
+  border: 1px solid var(--color-steel);
+}
+
+main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+}
+
+.card {
+  background: var(--color-white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.card h2 {
+  margin-top: 0;
+  font-size: 1.1rem;
+  color: var(--color-navy);
+}
+
+.role-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  background: var(--color-steel);
+  color: var(--color-white);
+}
+
+.role-badge.shipper {
+  background: #2f6f8f;
+}
+
+.role-badge.carrier {
+  background: var(--color-green);
+}
+
+.register-options {
+  display: flex;
+  gap: 16px;
+}
+
+table.agreements {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+table.agreements th,
+table.agreements td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-mist);
+}
+
+table.agreements th {
+  color: var(--color-steel);
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.status-pill {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.status-Created { background: #dde6ee; color: var(--color-navy); }
+.status-Funded { background: #d8ecf5; color: #22617f; }
+.status-InProgress, .status-In.Progress { background: #fdf1d6; color: #9b6b0c; }
+.status-Completed { background: #dcf3e5; color: var(--color-green); }
+.status-Refunded { background: #f6dede; color: var(--color-red); }
+.status-Disputed { background: #f6dede; color: var(--color-red); }
+
+.empty-state {
+  text-align: center;
+  color: var(--color-steel);
+  padding: 32px 0;
+}
+
+.hint {
+  font-size: 0.85rem;
+  color: var(--color-steel);
+  margin-top: 4px;
+}
