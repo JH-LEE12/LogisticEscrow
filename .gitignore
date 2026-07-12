@@ -146,3 +146,7 @@ vite.config.ts.timestamp-*
 node_modules/
 build/
 .env
+
+# Ignore testing files at this point
+contracts/AgreementRegistryStandalone.sol
+migrations/2_deploy_agreement_registry.js
