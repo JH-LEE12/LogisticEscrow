@@ -183,12 +183,31 @@ table.agreements th {
   font-weight: 700;
 }
 
-.status-Created { background: #dde6ee; color: var(--color-navy); }
-.status-Funded { background: #d8ecf5; color: #22617f; }
-.status-InProgress, .status-In.Progress { background: #fdf1d6; color: #9b6b0c; }
-.status-Completed { background: #dcf3e5; color: var(--color-green); }
-.status-Refunded { background: #f6dede; color: var(--color-red); }
-.status-Disputed { background: #f6dede; color: var(--color-red); }
+.status-Created {
+  background: #dde6ee;
+  color: var(--color-navy);
+}
+.status-Funded {
+  background: #d8ecf5;
+  color: #22617f;
+}
+.status-InProgress,
+.status-In.Progress {
+  background: #fdf1d6;
+  color: #9b6b0c;
+}
+.status-Completed {
+  background: #dcf3e5;
+  color: var(--color-green);
+}
+.status-Refunded {
+  background: #f6dede;
+  color: var(--color-red);
+}
+.status-Disputed {
+  background: #f6dede;
+  color: var(--color-red);
+}
 
 .empty-state {
   text-align: center;
@@ -200,4 +219,82 @@ table.agreements th {
   font-size: 0.85rem;
   color: var(--color-steel);
   margin-top: 4px;
+}
+
+/* Additions for history.html — append these to the end of style.css.
+   Uses the same CSS variables already defined at the top of style.css,
+   so this stays visually consistent with the rest of the app. */
+
+.lookup-row {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.lookup-row input[type="number"] {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid var(--color-steel);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.timeline-item {
+  display: flex;
+  gap: 14px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--color-mist);
+}
+
+.timeline-item:last-child {
+  border-bottom: none;
+}
+
+.timeline-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--color-white);
+}
+
+.timeline-icon.created {
+  background: var(--color-steel);
+}
+.timeline-icon.funded {
+  background: #2f6f8f;
+}
+.timeline-icon.inprogress {
+  background: var(--color-amber);
+}
+.timeline-icon.completed {
+  background: var(--color-green);
+}
+.timeline-icon.refunded,
+.timeline-icon.disputed {
+  background: var(--color-red);
+}
+
+.timeline-body h3 {
+  margin: 0 0 2px;
+  font-size: 0.95rem;
+  color: var(--color-navy);
+}
+
+.timeline-body p {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--color-steel);
 }

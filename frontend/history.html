@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LogisticsEscrow — History</title>
+    <link rel="stylesheet" href="style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.umd.min.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">Logistics<span>Escrow</span></div>
+      <nav class="tabs">
+        <a href="index.html">Dashboard</a>
+        <a href="create.html">Create Agreement</a>
+        <a href="milestones.html">Milestones</a>
+        <a href="history.html" class="active">History</a>
+      </nav>
+      <div class="wallet-box">
+        <span
+          id="walletAddress"
+          class="wallet-address"
+          style="display: none"
+        ></span>
+        <button id="connectBtn">Connect Wallet</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="card" id="connectPrompt">
+        <h2>Connect your wallet</h2>
+        <p>Connect MetaMask to look up an agreement's full history.</p>
+      </section>
+
+      <section class="card" id="lookupCard" style="display: none">
+        <h2>Agreement history</h2>
+        <p class="hint">
+          Enter an agreement ID to see its full status timeline, built from
+          on-chain events. No gas required to look this up — it's a read-only
+          query.
+        </p>
+        <div class="lookup-row">
+          <input
+            type="number"
+            id="agreementIdInput"
+            min="1"
+            placeholder="Agreement ID, e.g. 1"
+          />
+          <button id="loadHistoryBtn">Load history</button>
+        </div>
+      </section>
+
+      <section class="card" id="timelineCard" style="display: none">
+        <h2 id="timelineTitle">Agreement</h2>
+        <div id="timelineContainer">
+          <p class="empty-state">Loading...</p>
+        </div>
+      </section>
+    </main>
+
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+    <script>
+      // history.html — Member 4's module.
+      //
+      // Builds a full status-change timeline for one agreement by reading
+      // on-chain events, rather than storing history in contract storage.
+      // AgreementStatusChanged is emitted by every module (via the shared
+      // _setStatus() helper in AgreementRegistry.sol), so this single query
+      // gives a complete cross-module timeline for free.
+      //
+      // If config.js's ABI also includes RefundDispute's own richer events
+      // (DisputeRaised, DisputeResolved, RefundIssued), this page shows those
+      // too, with reasons and amounts. If not, it still works — it just shows
+      // the generic status changes only. See config.js for what to add.
+
+      const connectBtn = document.getElementById("connectBtn");
+      const walletAddressEl = document.getElementById("walletAddress");
+      const connectPrompt = document.getElementById("connectPrompt");
+      const lookupCard = document.getElementById("lookupCard");
+      const timelineCard = document.getElementById("timelineCard");
+      const timelineTitle = document.getElementById("timelineTitle");
+      const timelineContainer = document.getElementById("timelineContainer");
+      const agreementIdInput = document.getElementById("agreementIdInput");
+      const loadHistoryBtn = document.getElementById("loadHistoryBtn");
+
+      function shortenAddress(addr) {
+        return addr.slice(0, 6) + "..." + addr.slice(-4);
+      }
+
+      function onConnected() {
+        walletAddressEl.textContent = shortenAddress(getCurrentAccount());
+        walletAddressEl.style.display = "inline-block";
+        connectBtn.textContent = "Connected";
+        connectBtn.disabled = true;
+        connectPrompt.style.display = "none";
+        lookupCard.style.display = "block";
+      }
+
+      async function renderEvent(kind, log) {
+        const block = await provider.getBlock(log.blockNumber);
+        const timestamp = new Date(
+          Number(block.timestamp) * 1000,
+        ).toLocaleString();
+
+        if (kind === "status") {
+          const statusCode = Number(log.args.newStatus);
+          const label = STATUS_LABEL[statusCode];
+          const cls = label.toLowerCase().replace(/\s+/g, "");
+          return `
+        <div class="timeline-item">
+          <div class="timeline-icon ${cls}">${label.charAt(0)}</div>
+          <div class="timeline-body">
+            <h3>${label}</h3>
+            <p>${timestamp}</p>
+          </div>
+        </div>`;
+        }
+
+        if (kind === "dispute") {
+          return `
+        <div class="timeline-item">
+          <div class="timeline-icon disputed">!</div>
+          <div class="timeline-body">
+            <h3>Dispute raised</h3>
+            <p>By ${shortenAddress(log.args.raisedBy)} — "${log.args.reason}" · ${timestamp}</p>
+          </div>
+        </div>`;
+        }
+
+        if (kind === "refund") {
+          return `
+        <div class="timeline-item">
+          <div class="timeline-icon refunded">R</div>
+          <div class="timeline-body">
+            <h3>Refund issued</h3>
+            <p>${ethers.formatEther(log.args.amount)} ETH to ${shortenAddress(log.args.shipper)} · ${timestamp}</p>
+          </div>
+        </div>`;
+        }
+
+        if (kind === "resolved") {
+          return `
+        <div class="timeline-item">
+          <div class="timeline-icon completed">A</div>
+          <div class="timeline-body">
+            <h3>Dispute resolved</h3>
+            <p>Arbitrator split — ${ethers.formatEther(log.args.toShipper)} ETH shipper / ${ethers.formatEther(log.args.toCarrier)} ETH carrier · ${timestamp}</p>
+          </div>
+        </div>`;
+        }
+
+        return "";
+      }
+
+      async function loadHistory(agreementId) {
+        const c = getContract();
+
+        const agreement = await getAgreement(agreementId);
+        timelineTitle.textContent = `Agreement #${agreement.id}`;
+        timelineContainer.innerHTML = '<p class="empty-state">Loading...</p>';
+
+        const events = [];
+
+        const statusLogs = await c.queryFilter(
+          c.filters.AgreementStatusChanged(agreementId),
+        );
+        for (const log of statusLogs) events.push({ kind: "status", log });
+
+        // These filters only work once config.js's ABI includes RefundDispute's
+        // own events. If it doesn't yet, these three just quietly find nothing
+        // and the page still works with the generic status log above.
+        try {
+          const disputeLogs = await c.queryFilter(
+            c.filters.DisputeRaised(agreementId),
+          );
+          for (const log of disputeLogs) events.push({ kind: "dispute", log });
+
+          const refundLogs = await c.queryFilter(
+            c.filters.RefundIssued(agreementId),
+          );
+          for (const log of refundLogs) events.push({ kind: "refund", log });
+
+          const resolvedLogs = await c.queryFilter(
+            c.filters.DisputeResolved(agreementId),
+          );
+          for (const log of resolvedLogs)
+            events.push({ kind: "resolved", log });
+        } catch (err) {
+          console.warn(
+            "RefundDispute-specific events not in ABI yet — showing status log only.",
+            err,
+          );
+        }
+
+        events.sort(
+          (a, b) =>
+            a.log.blockNumber - b.log.blockNumber || a.log.index - b.log.index,
+        );
+
+        if (events.length === 0) {
+          timelineContainer.innerHTML =
+            '<p class="empty-state">No history found for this agreement yet.</p>';
+          return;
+        }
+
+        const rows = await Promise.all(
+          events.map((e) => renderEvent(e.kind, e.log)),
+        );
+        timelineContainer.innerHTML = `<div class="timeline">${rows.join("")}</div>`;
+      }
+
+      connectBtn.addEventListener("click", async () => {
+        const account = await connectWallet();
+        if (account) onConnected();
+      });
+
+      loadHistoryBtn.addEventListener("click", async () => {
+        const id = Number(agreementIdInput.value);
+        if (!id || id < 1) {
+          alert("Enter a valid agreement ID.");
+          return;
+        }
+        timelineCard.style.display = "block";
+        try {
+          await loadHistory(id);
+        } catch (err) {
+          console.error(err);
+          timelineContainer.innerHTML =
+            '<p class="empty-state">Could not load history — check the agreement ID and try again.</p>';
+        }
+      });
+
+      window.addEventListener("DOMContentLoaded", async () => {
+        const account = await restoreSession();
+        if (account) onConnected();
+      });
+    </script>
+  </body>
+</html>
