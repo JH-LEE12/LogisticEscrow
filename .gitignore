@@ -150,3 +150,5 @@ build/
 # Ignore testing files at this point
 contracts/AgreementRegistryStandalone.sol
 migrations/2_deploy_agreement_registry.js
+contracts/TestAdvanced.sol
+migrations/3_deploy_test_advanced.js
