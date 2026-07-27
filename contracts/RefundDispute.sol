@@ -19,24 +19,28 @@ import "./AgreementRegistry.sol";
  *      builds via ethers.js queryFilter() (see the note above
  *      getRefundDisputeHistory below).
  *
+ * ALIGNED with Member 1's revised AgreementRegistry.sol:
+ *   - Uses custom errors (not require strings), matching the base module.
+ *   - Respects the new emergency-pause system via whenNotPaused on the
+ *     state-changing entry points.
+ *   - Works with the packed struct (uint40 deadline/createdAt, uint32
+ *     milestoneCount). Fields are accessed by name, so the struct's new
+ *     field ordering doesn't affect this module.
+ *
  * INTEGRATION NOTE — read this before wiring things up with Member 2 & 3:
  * This module inherits ONLY AgreementRegistry, per the project rule that
- * nobody edits or depends directly on another member's file. That means it
- * has no visibility into Funding.sol's private escrow bookkeeping (how much
- * has already been paid out via milestones). To stay correct without that
- * visibility:
+ * nobody depends directly on another member's file. That means it has no
+ * visibility into Funding.sol's private escrow bookkeeping (how much has
+ * already been paid out via milestones). To stay correct without that:
  *   - checkAndTriggerRefund() only works while status == Funded, i.e.
  *     BEFORE MilestonePayout has released anything. At that point the full
- *     `payloadValue` is guaranteed to still be sitting in the contract, so
+ *     `payloadValue` is guaranteed to still be in the contract, so
  *     refunding it is always safe.
  *   - If an agreement is already InProgress (partial payouts made) and the
  *     deadline passes, this module raises a Dispute instead of guessing at
  *     a refund amount. The human arbitrator (who can check history.html /
  *     the event log to see exactly what's been paid) enters the correct
  *     split manually in resolveDispute().
- * If your team wants tighter automation later, ask Member 2 to expose
- * escrow balance as a public state variable so this module (once combined
- * in LogisticsEscrow.sol) can read it directly.
  */
 abstract contract RefundDispute is AgreementRegistry {
     // ---------------------------------------------------------------------
@@ -46,7 +50,7 @@ abstract contract RefundDispute is AgreementRegistry {
     /// @notice One entry in an agreement's status-change timeline.
     struct StatusLogEntry {
         AgreementStatus status;
-        uint256 timestamp;
+        uint40 timestamp;
     }
 
     /// @dev agreementId => status changes made BY THIS MODULE.
@@ -63,6 +67,19 @@ abstract contract RefundDispute is AgreementRegistry {
     mapping(uint256 => bool) private _finalized;
 
     // ---------------------------------------------------------------------
+    // Custom errors (matching AgreementRegistry's style)
+    // ---------------------------------------------------------------------
+
+    error ArbitratorAlreadySet();
+    error NotArbitrator();
+    error DeadlineNotPassed(uint256 agreementId);
+    error AlreadyFinalized(uint256 agreementId);
+    error NotDisputable(uint256 agreementId);
+    error NotDisputed(uint256 agreementId);
+    error InsufficientContractBalance();
+    error TransferFailed();
+
+    // ---------------------------------------------------------------------
     // Events
     // ---------------------------------------------------------------------
 
@@ -77,16 +94,16 @@ abstract contract RefundDispute is AgreementRegistry {
 
     /// @notice One-time setup for the human arbitrator address. Call this
     /// right after deploying the combined LogisticsEscrow contract.
-    function setArbitrator(address arbitratorAddress) external {
-        require(!_arbitratorSet, "RefundDispute: arbitrator already set");
-        require(arbitratorAddress != address(0), "RefundDispute: zero address");
+    function setArbitrator(address arbitratorAddress) external onlyOwner {
+        if (_arbitratorSet) revert ArbitratorAlreadySet();
+        if (arbitratorAddress == address(0)) revert ZeroAddress();
         arbitrator = arbitratorAddress;
         _arbitratorSet = true;
         emit ArbitratorSet(arbitratorAddress);
     }
 
     modifier onlyArbitrator() {
-        require(msg.sender == arbitrator, "RefundDispute: caller is not the arbitrator");
+        if (msg.sender != arbitrator) revert NotArbitrator();
         _;
     }
 
@@ -99,16 +116,19 @@ abstract contract RefundDispute is AgreementRegistry {
      *         with zero milestones paid out yet. Refunds the full
      *         payloadValue back to the Shipper and closes the agreement.
      * @dev Restricted to AgreementStatus.Funded — see the contract-level
-     *      note above for why.
+     *      note above for why. block.timestamp (uint256) is compared
+     *      against a.deadline (uint40); Solidity widens the uint40 for the
+     *      comparison automatically.
      */
     function checkAndTriggerRefund(uint256 agreementId)
         external
+        whenNotPaused
         agreementExists(agreementId)
         atStatus(agreementId, AgreementStatus.Funded)
     {
         Agreement storage a = agreements[agreementId];
-        require(block.timestamp > a.deadline, "RefundDispute: deadline not yet passed");
-        require(!_finalized[agreementId], "RefundDispute: already finalized");
+        if (block.timestamp <= a.deadline) revert DeadlineNotPassed(agreementId);
+        if (_finalized[agreementId]) revert AlreadyFinalized(agreementId);
 
         _finalized[agreementId] = true;
         _setStatus(agreementId, AgreementStatus.Refunded);
@@ -116,7 +136,7 @@ abstract contract RefundDispute is AgreementRegistry {
 
         uint256 amount = a.payloadValue;
         (bool sent, ) = payable(a.shipper).call{value: amount}("");
-        require(sent, "RefundDispute: refund transfer failed");
+        if (!sent) revert TransferFailed();
 
         emit RefundIssued(agreementId, a.shipper, amount);
     }
@@ -136,15 +156,15 @@ abstract contract RefundDispute is AgreementRegistry {
      */
     function raiseDispute(uint256 agreementId, string calldata reason)
         external
+        whenNotPaused
         agreementExists(agreementId)
         onlyParticipant(agreementId)
     {
         AgreementStatus current = agreements[agreementId].status;
-        require(
-            current == AgreementStatus.Funded || current == AgreementStatus.InProgress,
-            "RefundDispute: agreement not in a disputable state"
-        );
-        require(!_finalized[agreementId], "RefundDispute: already finalized");
+        if (current != AgreementStatus.Funded && current != AgreementStatus.InProgress) {
+            revert NotDisputable(agreementId);
+        }
+        if (_finalized[agreementId]) revert AlreadyFinalized(agreementId);
 
         isDisputed[agreementId] = true;
         _setStatus(agreementId, AgreementStatus.Disputed);
@@ -168,9 +188,9 @@ abstract contract RefundDispute is AgreementRegistry {
         agreementExists(agreementId)
         onlyArbitrator
     {
-        require(isDisputed[agreementId], "RefundDispute: agreement is not disputed");
-        require(!_finalized[agreementId], "RefundDispute: already finalized");
-        require(toShipper + toCarrier <= address(this).balance, "RefundDispute: insufficient contract balance");
+        if (!isDisputed[agreementId]) revert NotDisputed(agreementId);
+        if (_finalized[agreementId]) revert AlreadyFinalized(agreementId);
+        if (toShipper + toCarrier > address(this).balance) revert InsufficientContractBalance();
 
         Agreement storage a = agreements[agreementId];
         _finalized[agreementId] = true;
@@ -182,11 +202,11 @@ abstract contract RefundDispute is AgreementRegistry {
 
         if (toShipper > 0) {
             (bool sentShipper, ) = payable(a.shipper).call{value: toShipper}("");
-            require(sentShipper, "RefundDispute: shipper transfer failed");
+            if (!sentShipper) revert TransferFailed();
         }
         if (toCarrier > 0) {
             (bool sentCarrier, ) = payable(a.carrier).call{value: toCarrier}("");
-            require(sentCarrier, "RefundDispute: carrier transfer failed");
+            if (!sentCarrier) revert TransferFailed();
         }
 
         emit DisputeResolved(agreementId, msg.sender, toShipper, toCarrier);
@@ -197,7 +217,7 @@ abstract contract RefundDispute is AgreementRegistry {
     // ---------------------------------------------------------------------
 
     function _logStatus(uint256 agreementId, AgreementStatus status) internal {
-        _statusLog[agreementId].push(StatusLogEntry({status: status, timestamp: block.timestamp}));
+        _statusLog[agreementId].push(StatusLogEntry({status: status, timestamp: uint40(block.timestamp)}));
     }
 
     /**
@@ -208,14 +228,7 @@ abstract contract RefundDispute is AgreementRegistry {
      *      AgreementStatusChanged event off-chain instead. Every module
      *      (including this one) emits that same event through the inherited
      *      _setStatus() helper, so ethers.js queryFilter() against it gives
-     *      a full, gas-free timeline for history.html. Example:
-     *
-     *        const filter = contract.filters.AgreementStatusChanged(agreementId);
-     *        const logs = await contract.queryFilter(filter);
-     *        for (const log of logs) {
-     *          const block = await log.getBlock();
-     *          console.log(log.args.newStatus, new Date(block.timestamp * 1000));
-     *        }
+     *      a full, gas-free timeline for history.html.
      */
     function getRefundDisputeHistory(uint256 agreementId)
         external
