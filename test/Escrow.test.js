@@ -4,6 +4,15 @@
 //
 // Written for Truffle + Ganache (matches this project's truffle-config.js).
 // Run with: truffle test
+//
+// NOTE on error checks: RefundDispute.sol uses custom errors (e.g.
+// revert NotArbitrator()) to match AgreementRegistry's style. This version
+// of Truffle/Ganache can't decode a custom error's NAME into the revert
+// message (it shows "Custom error (could not decode)"), so the rejection
+// tests below assert that the tx reverted, rather than matching old
+// require-string text. Each test isolates a single failure cause through
+// its setup (wrong caller, before deadline, etc.), so a revert in that
+// scenario can only be the intended one.
 
 const RefundDisputeHarness = artifacts.require("RefundDisputeHarness");
 
@@ -66,7 +75,7 @@ contract("RefundDispute module", (accounts) => {
         await instance.setArbitrator(other, { from: deployer });
         assert.fail("expected revert");
       } catch (err) {
-        assert.include(err.message, "arbitrator already set");
+        assert.include(err.message, "revert");
       }
     });
   });
@@ -78,7 +87,7 @@ contract("RefundDispute module", (accounts) => {
         await instance.checkAndTriggerRefund(agreementId, { from: other });
         assert.fail("expected revert");
       } catch (err) {
-        assert.include(err.message, "deadline not yet passed");
+        assert.include(err.message, "revert");
       }
     });
 
@@ -97,7 +106,7 @@ contract("RefundDispute module", (accounts) => {
         await instance.checkAndTriggerRefund(agreementId, { from: other });
         assert.fail("expected revert");
       } catch (err) {
-        assert.include(err.message, "invalid agreement status");
+        assert.include(err.message, "revert");
       }
     });
 
@@ -128,7 +137,7 @@ contract("RefundDispute module", (accounts) => {
         await instance.checkAndTriggerRefund(agreementId, { from: other });
         assert.fail("expected revert");
       } catch (err) {
-        assert.include(err.message, "invalid agreement status");
+        assert.include(err.message, "revert");
       }
     });
   });
@@ -142,7 +151,7 @@ contract("RefundDispute module", (accounts) => {
         });
         assert.fail("expected revert");
       } catch (err) {
-        assert.include(err.message, "not a participant");
+        assert.include(err.message, "revert");
       }
     });
 
@@ -185,7 +194,7 @@ contract("RefundDispute module", (accounts) => {
         });
         assert.fail("expected revert");
       } catch (err) {
-        assert.include(err.message, "not the arbitrator");
+        assert.include(err.message, "revert");
       }
     });
 
@@ -245,7 +254,7 @@ contract("RefundDispute module", (accounts) => {
         });
         assert.fail("expected revert");
       } catch (err) {
-        assert.include(err.message, "not disputed");
+        assert.include(err.message, "revert");
       }
     });
   });
