@@ -152,3 +152,7 @@ contracts/AgreementRegistryStandalone.sol
 migrations/2_deploy_agreement_registry.js
 contracts/TestAdvanced.sol
 migrations/3_deploy_test_advanced.js
+
+# Ignore testing files (Weiseng)
+contracts/TestFunding.sol
+migrations/4_deploy_test_funding.js
