@@ -42,6 +42,12 @@
         Role:
         <span id="roleBadge" class="role-badge">Not registered</span>
       </p>
+      <!-- Reputation Balance Display -->
+      <p>
+        Reputation Balance:
+        <strong id="reputationBalance">0</strong>
+        <span>LRT</span>
+      </p>
     </section>
 
     <!-- Agreements list -->
@@ -128,6 +134,14 @@
 
       const roleCode = await getUserRole(account);
       renderRoleBadge(roleCode);
+
+      // Fetch and render LRT balance
+      try {
+        const balance = await getReputationBalance(account);
+        document.getElementById("reputationBalance").textContent = balance;
+      } catch (err) {
+        console.warn("Could not fetch reputation balance:", err);
+      }
 
       registerCard.style.display = roleCode === ROLE.NONE ? "block" : "none";
 

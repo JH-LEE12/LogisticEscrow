@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "./AgreementRegistry.sol";
+import "./ReputationToken.sol";
 
 /// @title MilestonePayout
 /// @notice Member 3's module — Milestone Tracking & Progressive Payout.
-/// Inherits AgreementRegistry and handles milestone verification & payments.
-abstract contract MilestonePayout is AgreementRegistry {
+/// Inherits ReputationToken and handles milestone verification & payments.
+abstract contract MilestonePayout is ReputationToken {
     // ---------------------------------------------------------------------
     // Data Structures
     // ---------------------------------------------------------------------
@@ -131,6 +131,9 @@ abstract contract MilestonePayout is AgreementRegistry {
         if (totalPaidOut[agreementId] == a.payloadValue) {
             _setStatus(agreementId, AgreementStatus.Completed);
         }
+
+        // Mint Reputation Tokens to the Carrier
+        _mintReputation(a.carrier, MILESTONE_REWARD, "Milestone Completed");
 
         // Payout transfer
         (bool sent, ) = payable(a.carrier).call{value: m.amount}("");

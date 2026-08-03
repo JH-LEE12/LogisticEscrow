@@ -149,3 +149,21 @@ async function getMyAgreements(address) {
   }
   return mine;
 }
+
+/**
+ * Fetches the LRT reputation token balance for an address.
+ */
+async function getReputationBalance(address) {
+  const c = getContract();
+  const balanceWei = await c.balanceOf(address);
+  return ethers.formatEther(balanceWei); // Returns formatted number, e.g., "10.0"
+}
+
+/**
+ * Claims the completion bonus for a completed agreement.
+ */
+async function claimCompletionBonus(agreementId) {
+  const c = getContract();
+  const tx = await c.claimCompletionBonus(agreementId);
+  return tx.wait();
+}

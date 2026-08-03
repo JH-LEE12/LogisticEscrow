@@ -198,6 +198,16 @@
       }
     }
 
+    async function claimBonus(agreementId) {
+      try {
+        await claimCompletionBonus(agreementId);
+        alert("50 LRT Completion Bonus claimed successfully!");
+      } catch (err) {
+        console.error(err);
+        alert("Error claiming bonus: " + (err.reason || err.message));
+      }
+    }
+
     connectBtn.addEventListener("click", async () => {
       const account = await connectWallet();
       if (account) onConnected();

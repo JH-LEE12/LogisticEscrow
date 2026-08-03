@@ -449,6 +449,41 @@ window.CHAINCONFIG = {
       type: "event",
     },
 
+    // ---- ReputationToken functions (Member 5) ----
+    {
+      "inputs": [{"internalType": "address", "name": "account", "type": "address"}],
+      "name": "balanceOf",
+      "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "totalSupply",
+      "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [{"internalType": "uint256", "name": "agreementId", "type": "uint256"}],
+      "name": "claimCompletionBonus",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+
+    // ---- ReputationToken events (Member 5) ----
+    {
+      "anonymous": false,
+      "inputs": [
+        {"indexed": true, "internalType": "address", "name": "user", "type": "address"},
+        {"indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256"},
+        {"indexed": false, "internalType": "string", "name": "reason", "type": "string"}
+      ],
+      "name": "ReputationMinted",
+      "type": "event"
+    },
+
     // ---- HARNESS-ONLY (RefundDisputeHarness.sol) — remove once testing against real LogisticsEscrow ----
     {
       inputs: [
