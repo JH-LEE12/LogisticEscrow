@@ -184,6 +184,101 @@ window.CHAINCONFIG = {
       type: "event",
     },
 
+    // ---- MilestonePayout functions (Member 3) ----
+    {
+      inputs: [
+        { internalType: "uint256", name: "agreementId", type: "uint256" },
+        { internalType: "string[]", name: "descriptions", type: "string[]" },
+        { internalType: "uint256[]", name: "amounts", type: "uint256[]" }
+      ],
+      name: "setupMilestones",
+      outputs: [],
+      stateMutability: "nonpayable",
+      type: "function"
+    },
+    {
+      inputs: [
+        { internalType: "uint256", name: "agreementId", type: "uint256" },
+        { internalType: "uint256", name: "index", type: "uint256" }
+      ],
+      name: "submitMilestone",
+      outputs: [],
+      stateMutability: "nonpayable",
+      type: "function"
+    },
+    {
+      inputs: [
+        { internalType: "uint256", name: "agreementId", type: "uint256" },
+        { internalType: "uint256", name: "index", type: "uint256" }
+      ],
+      name: "verifyAndReleaseMilestone",
+      outputs: [],
+      stateMutability: "nonpayable",
+      type: "function"
+    },
+    {
+      inputs: [
+        { internalType: "uint256", name: "agreementId", type: "uint256" }
+      ],
+      name: "getMilestones",
+      outputs: [
+        {
+          components: [
+            { internalType: "string", name: "description", type: "string" },
+            { internalType: "uint256", name: "amount", type: "uint256" },
+            { internalType: "bool", name: "isSubmitted", type: "bool" },
+            { internalType: "bool", name: "isVerified", type: "bool" },
+            { internalType: "bool", name: "isPaid", type: "bool" }
+          ],
+          internalType: "struct MilestonePayout.Milestone[]",
+          name: "",
+          type: "tuple[]"
+        }
+      ],
+      stateMutability: "view",
+      type: "function"
+    },
+
+    // ---- MilestonePayout events (Member 3) ----
+    {
+      anonymous: false,
+      inputs: [
+        { indexed: true, internalType: "uint256", name: "agreementId", type: "uint256" },
+        { indexed: false, internalType: "uint256", name: "count", type: "uint256" }
+      ],
+      name: "MilestonesConfigured",
+      type: "event"
+    },
+    {
+      anonymous: false,
+      inputs: [
+        { indexed: true, internalType: "uint256", name: "agreementId", type: "uint256" },
+        { indexed: true, internalType: "uint256", name: "index", type: "uint256" }
+      ],
+      name: "MilestoneSubmitted",
+      type: "event"
+    },
+    {
+      anonymous: false,
+      inputs: [
+        { indexed: true, internalType: "uint256", name: "agreementId", type: "uint256" },
+        { indexed: true, internalType: "uint256", name: "index", type: "uint256" }
+      ],
+      name: "MilestoneVerified",
+      type: "event"
+    },
+    {
+      anonymous: false,
+      inputs: [
+        { indexed: true, internalType: "uint256", name: "agreementId", type: "uint256" },
+        { indexed: true, internalType: "uint256", name: "index", type: "uint256" },
+        { indexed: true, internalType: "address", name: "carrier", type: "address" },
+        { indexed: false, internalType: "uint256", name: "amount", type: "uint256" }
+      ],
+      name: "PaymentReleased",
+      type: "event"
+    },
+
     // ---- RefundDispute functions (Member 4) ----
     {
       inputs: [
