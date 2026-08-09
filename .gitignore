@@ -156,3 +156,7 @@ migrations/3_deploy_test_advanced.js
 # Ignore testing files (Weiseng)
 contracts/TestFunding.sol
 migrations/4_deploy_test_funding.js
+
+# Ignore testing files (Tokenisation module)
+contracts/TokenisationTest.sol
+migrations/5_deploy_tokenisation_test.js

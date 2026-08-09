@@ -189,36 +189,36 @@ window.CHAINCONFIG = {
       inputs: [
         { internalType: "uint256", name: "agreementId", type: "uint256" },
         { internalType: "string[]", name: "descriptions", type: "string[]" },
-        { internalType: "uint256[]", name: "amounts", type: "uint256[]" }
+        { internalType: "uint256[]", name: "amounts", type: "uint256[]" },
       ],
       name: "setupMilestones",
       outputs: [],
       stateMutability: "nonpayable",
-      type: "function"
+      type: "function",
     },
     {
       inputs: [
         { internalType: "uint256", name: "agreementId", type: "uint256" },
-        { internalType: "uint256", name: "index", type: "uint256" }
+        { internalType: "uint256", name: "index", type: "uint256" },
       ],
       name: "submitMilestone",
       outputs: [],
       stateMutability: "nonpayable",
-      type: "function"
+      type: "function",
     },
     {
       inputs: [
         { internalType: "uint256", name: "agreementId", type: "uint256" },
-        { internalType: "uint256", name: "index", type: "uint256" }
+        { internalType: "uint256", name: "index", type: "uint256" },
       ],
       name: "verifyAndReleaseMilestone",
       outputs: [],
       stateMutability: "nonpayable",
-      type: "function"
+      type: "function",
     },
     {
       inputs: [
-        { internalType: "uint256", name: "agreementId", type: "uint256" }
+        { internalType: "uint256", name: "agreementId", type: "uint256" },
       ],
       name: "getMilestones",
       outputs: [
@@ -228,55 +228,105 @@ window.CHAINCONFIG = {
             { internalType: "uint256", name: "amount", type: "uint256" },
             { internalType: "bool", name: "isSubmitted", type: "bool" },
             { internalType: "bool", name: "isVerified", type: "bool" },
-            { internalType: "bool", name: "isPaid", type: "bool" }
+            { internalType: "bool", name: "isPaid", type: "bool" },
           ],
           internalType: "struct MilestonePayout.Milestone[]",
           name: "",
-          type: "tuple[]"
-        }
+          type: "tuple[]",
+        },
       ],
       stateMutability: "view",
-      type: "function"
+      type: "function",
     },
 
     // ---- MilestonePayout events (Member 3) ----
     {
       anonymous: false,
       inputs: [
-        { indexed: true, internalType: "uint256", name: "agreementId", type: "uint256" },
-        { indexed: false, internalType: "uint256", name: "count", type: "uint256" }
+        {
+          indexed: true,
+          internalType: "uint256",
+          name: "agreementId",
+          type: "uint256",
+        },
+        {
+          indexed: false,
+          internalType: "uint256",
+          name: "count",
+          type: "uint256",
+        },
       ],
       name: "MilestonesConfigured",
-      type: "event"
+      type: "event",
     },
     {
       anonymous: false,
       inputs: [
-        { indexed: true, internalType: "uint256", name: "agreementId", type: "uint256" },
-        { indexed: true, internalType: "uint256", name: "index", type: "uint256" }
+        {
+          indexed: true,
+          internalType: "uint256",
+          name: "agreementId",
+          type: "uint256",
+        },
+        {
+          indexed: true,
+          internalType: "uint256",
+          name: "index",
+          type: "uint256",
+        },
       ],
       name: "MilestoneSubmitted",
-      type: "event"
+      type: "event",
     },
     {
       anonymous: false,
       inputs: [
-        { indexed: true, internalType: "uint256", name: "agreementId", type: "uint256" },
-        { indexed: true, internalType: "uint256", name: "index", type: "uint256" }
+        {
+          indexed: true,
+          internalType: "uint256",
+          name: "agreementId",
+          type: "uint256",
+        },
+        {
+          indexed: true,
+          internalType: "uint256",
+          name: "index",
+          type: "uint256",
+        },
       ],
       name: "MilestoneVerified",
-      type: "event"
+      type: "event",
     },
     {
       anonymous: false,
       inputs: [
-        { indexed: true, internalType: "uint256", name: "agreementId", type: "uint256" },
-        { indexed: true, internalType: "uint256", name: "index", type: "uint256" },
-        { indexed: true, internalType: "address", name: "carrier", type: "address" },
-        { indexed: false, internalType: "uint256", name: "amount", type: "uint256" }
+        {
+          indexed: true,
+          internalType: "uint256",
+          name: "agreementId",
+          type: "uint256",
+        },
+        {
+          indexed: true,
+          internalType: "uint256",
+          name: "index",
+          type: "uint256",
+        },
+        {
+          indexed: true,
+          internalType: "address",
+          name: "carrier",
+          type: "address",
+        },
+        {
+          indexed: false,
+          internalType: "uint256",
+          name: "amount",
+          type: "uint256",
+        },
       ],
       name: "PaymentReleased",
-      type: "event"
+      type: "event",
     },
 
     // ---- RefundDispute functions (Member 4) ----
@@ -451,37 +501,149 @@ window.CHAINCONFIG = {
 
     // ---- ReputationToken functions (Member 5) ----
     {
-      "inputs": [{"internalType": "address", "name": "account", "type": "address"}],
-      "name": "balanceOf",
-      "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-      "stateMutability": "view",
-      "type": "function"
+      inputs: [{ internalType: "address", name: "account", type: "address" }],
+      name: "balanceOf",
+      outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+      stateMutability: "view",
+      type: "function",
     },
     {
-      "inputs": [],
-      "name": "totalSupply",
-      "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-      "stateMutability": "view",
-      "type": "function"
+      inputs: [],
+      name: "totalSupply",
+      outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+      stateMutability: "view",
+      type: "function",
     },
     {
-      "inputs": [{"internalType": "uint256", "name": "agreementId", "type": "uint256"}],
-      "name": "claimCompletionBonus",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
+      inputs: [
+        { internalType: "uint256", name: "agreementId", type: "uint256" },
+      ],
+      name: "claimCompletionBonus",
+      outputs: [],
+      stateMutability: "nonpayable",
+      type: "function",
     },
 
     // ---- ReputationToken events (Member 5) ----
     {
-      "anonymous": false,
-      "inputs": [
-        {"indexed": true, "internalType": "address", "name": "user", "type": "address"},
-        {"indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256"},
-        {"indexed": false, "internalType": "string", "name": "reason", "type": "string"}
+      anonymous: false,
+      inputs: [
+        {
+          indexed: true,
+          internalType: "address",
+          name: "user",
+          type: "address",
+        },
+        {
+          indexed: false,
+          internalType: "uint256",
+          name: "amount",
+          type: "uint256",
+        },
+        {
+          indexed: false,
+          internalType: "string",
+          name: "reason",
+          type: "string",
+        },
       ],
-      "name": "ReputationMinted",
-      "type": "event"
+      name: "ReputationMinted",
+      type: "event",
+    },
+
+    // ---- TokenisationModule functions (Member 5 — Tokenisation) ----
+    // balanceOf/totalSupply/name/symbol/decimals are already declared above
+    // under "ReputationToken functions (Member 5)" with identical signatures,
+    // so they aren't repeated here.
+    {
+      inputs: [{ internalType: "address", name: "carrier", type: "address" }],
+      name: "reputationLevel",
+      outputs: [{ internalType: "string", name: "", type: "string" }],
+      stateMutability: "view",
+      type: "function",
+    },
+    {
+      inputs: [
+        { internalType: "uint256", name: "agreementId", type: "uint256" },
+        { internalType: "uint256", name: "milestoneId", type: "uint256" },
+      ],
+      name: "milestoneRewarded",
+      outputs: [{ internalType: "bool", name: "", type: "bool" }],
+      stateMutability: "view",
+      type: "function",
+    },
+    {
+      inputs: [
+        { internalType: "uint256", name: "agreementId", type: "uint256" },
+      ],
+      name: "completionRewarded",
+      outputs: [{ internalType: "bool", name: "", type: "bool" }],
+      stateMutability: "view",
+      type: "function",
+    },
+
+    // ---- TokenisationModule events (Member 5 — Tokenisation) ----
+    {
+      anonymous: false,
+      inputs: [
+        {
+          indexed: true,
+          internalType: "address",
+          name: "carrier",
+          type: "address",
+        },
+        {
+          indexed: true,
+          internalType: "uint256",
+          name: "agreementId",
+          type: "uint256",
+        },
+        {
+          indexed: true,
+          internalType: "uint256",
+          name: "milestoneId",
+          type: "uint256",
+        },
+        {
+          indexed: false,
+          internalType: "uint8",
+          name: "rewardKind",
+          type: "uint8",
+        },
+        {
+          indexed: false,
+          internalType: "uint256",
+          name: "amount",
+          type: "uint256",
+        },
+      ],
+      name: "ReputationRewarded",
+      type: "event",
+    },
+    {
+      anonymous: false,
+      inputs: [
+        {
+          indexed: true,
+          internalType: "address",
+          name: "carrier",
+          type: "address",
+        },
+        {
+          indexed: true,
+          internalType: "uint256",
+          name: "agreementId",
+          type: "uint256",
+        },
+        {
+          indexed: false,
+          internalType: "uint256",
+          name: "amount",
+          type: "uint256",
+        },
+      ],
+      name: "CompletionBonusRewarded",
+      type: "event",
     },
 
     // ---- HARNESS-ONLY (RefundDisputeHarness.sol) — remove once testing against real LogisticsEscrow ----

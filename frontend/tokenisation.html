@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LogisticsEscrow — Reputation</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Ethers v6 (matching index.html, milestones.html, history.html) -->
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.umd.min.js"></script>
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="brand">Logistics<span>Escrow</span></div>
+    <nav class="tabs">
+      <a href="index.html">Dashboard</a>
+      <a href="create.html">Create Agreement</a>
+      <a href="milestones.html">Milestones</a>
+      <a href="history.html">History</a>
+      <a href="tokenisation.html" class="active">Reputation</a>
+    </nav>
+    <div class="wallet-box">
+      <span id="walletAddress" class="wallet-address" style="display:none;"></span>
+      <button id="connectBtn">Connect Wallet</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Connect Wallet Prompt -->
+    <section class="card" id="connectPrompt">
+      <h2>My Reputation</h2>
+      <p>Connect MetaMask to view your carrier reputation (LRT), level and reward history.</p>
+    </section>
+
+    <!-- Wrong network / missing deployment warning -->
+    <section class="card" id="warningCard" style="display:none;">
+      <h2>Reputation module unavailable</h2>
+      <p id="warningText" class="hint"></p>
+    </section>
+
+    <!-- Reputation summary -->
+    <section class="card" id="summaryCard" style="display:none;">
+      <h2>My Reputation</h2>
+      <p class="hint">Wallet: <span id="summaryWallet"></span></p>
+      <p>
+        LRT balance:
+        <strong id="lrtBalance">0</strong>
+      </p>
+      <p>
+        Level:
+        <span id="lrtLevel" class="role-badge">New Carrier</span>
+      </p>
+    </section>
+
+    <!-- Recent rewards -->
+    <section class="card" id="rewardsCard" style="display:none;">
+      <h2>Recent rewards</h2>
+      <div id="rewardsContainer">
+        <p class="empty-state">No rewards yet.</p>
+      </div>
+    </section>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+  <script>
+    const connectBtn = document.getElementById("connectBtn");
+    const walletAddressEl = document.getElementById("walletAddress");
+    const connectPrompt = document.getElementById("connectPrompt");
+    const warningCard = document.getElementById("warningCard");
+    const warningText = document.getElementById("warningText");
+    const summaryCard = document.getElementById("summaryCard");
+    const summaryWallet = document.getElementById("summaryWallet");
+    const lrtBalance = document.getElementById("lrtBalance");
+    const lrtLevel = document.getElementById("lrtLevel");
+    const rewardsCard = document.getElementById("rewardsCard");
+    const rewardsContainer = document.getElementById("rewardsContainer");
+
+    function shortenAddress(addr) {
+      return addr.slice(0, 6) + "..." + addr.slice(-4);
+    }
+
+    function levelClass(level) {
+      // Reuses the .role-badge look from style.css with level-specific tints.
+      if (level === "Gold") return "carrier";
+      if (level === "Silver" || level === "Bronze") return "shipper";
+      return "";
+    }
+
+    function renderRewards(rows) {
+      if (rows.length === 0) {
+        rewardsContainer.innerHTML = '<p class="empty-state">No rewards yet. Rewards appear here once a verified milestone or completed agreement issues LRT.</p>';
+        return;
+      }
+
+      const body = rows.map(r => `
+        <tr>
+          <td>Agreement ${r.agreementId}</td>
+          <td>${r.label}</td>
+          <td>+${r.amount} LRT</td>
+        </tr>
+      `).join("");
+
+      rewardsContainer.innerHTML = `
+        <table class="agreements">
+          <thead>
+            <tr><th>Agreement</th><th>Reward</th><th>Amount</th></tr>
+          </thead>
+          <tbody>${body}</tbody>
+        </table>
+      `;
+    }
+
+    async function refreshReputation() {
+      const account = getCurrentAccount();
+      if (!account) return;
+
+      walletAddressEl.textContent = shortenAddress(account);
+      walletAddressEl.style.display = "inline-block";
+      connectBtn.textContent = "Connected";
+      connectBtn.disabled = true;
+      connectPrompt.style.display = "none";
+      warningCard.style.display = "none";
+
+      summaryWallet.textContent = shortenAddress(account);
+
+      try {
+        const [balance, level, history] = await Promise.all([
+          getCarrierReputation(account),
+          getCarrierReputationLevel(account),
+          getCarrierRewardHistory(account),
+        ]);
+
+        lrtBalance.textContent = balance;
+        lrtLevel.textContent = level;
+        lrtLevel.className = "role-badge " + levelClass(level);
+
+        summaryCard.style.display = "block";
+        rewardsCard.style.display = "block";
+        renderRewards(history);
+      } catch (err) {
+        console.error("Could not load reputation data:", err);
+        summaryCard.style.display = "none";
+        rewardsCard.style.display = "none";
+        warningCard.style.display = "block";
+        warningText.textContent =
+          "Could not read reputation data. This usually means the Tokenisation " +
+          "module isn't deployed at the address in config.js, or MetaMask is on " +
+          "the wrong network. Confirm frontend/config.js has your local " +
+          "TokenisationTest deployment address and that MetaMask is connected " +
+          "to the same Ganache network truffle migrated to.";
+      }
+    }
+
+    connectBtn.addEventListener("click", async () => {
+      const account = await connectWallet();
+      if (account) await refreshReputation();
+    });
+
+    // Auto-reconnect on page load if MetaMask already trusts this site.
+    // Account/network changes trigger a full page reload via the listeners
+    // registered in connectWallet() (see app.js), so this page always
+    // re-reads fresh state after either.
+    window.addEventListener("DOMContentLoaded", async () => {
+      const account = await restoreSession();
+      if (account) await refreshReputation();
+    });
+  </script>
+</body>
+</html>

@@ -167,3 +167,68 @@ async function claimCompletionBonus(agreementId) {
   const tx = await c.claimCompletionBonus(agreementId);
   return tx.wait();
 }
+
+// ---------------------------------------------------------------------
+// Tokenisation module (Member 5) — carrier reputation reads.
+// Talks to TokenisationModule.sol via the same shared `contract` instance.
+// Read-only: there is no mint/claim call here on purpose, since reward
+// creation is meant to happen only through the verified milestone flow.
+// Requires config.js's ABI to include the "TokenisationTest (local harness)"
+// section — reputationLevel, milestoneRewarded, completionRewarded, and the
+// ReputationRewarded/CompletionBonusRewarded events.
+// Note: unlike getReputationBalance() above (which reads the legacy 18-decimal
+// ReputationToken.sol), TokenisationModule.decimals() == 0, so balances here
+// are plain integers — no ethers.formatEther needed.
+// ---------------------------------------------------------------------
+
+/**
+ * Fetches a carrier's current LRT balance as a plain integer.
+ */
+async function getCarrierReputation(address) {
+  const c = getContract();
+  const balance = await c.balanceOf(address);
+  return Number(balance);
+}
+
+/**
+ * Fetches a carrier's displayed reputation level (New Carrier/Bronze/Silver/Gold).
+ */
+async function getCarrierReputationLevel(address) {
+  const c = getContract();
+  return c.reputationLevel(address);
+}
+
+// Mirrors TokenisationModule.sol -> enum RewardKind { Pickup, Intermediate, Delivery }
+const REWARD_KIND_LABEL = ["Pickup", "In Transit", "Delivery"];
+
+/**
+ * Queries a carrier's full reward history (milestone rewards + completion
+ * bonuses) from contract events and returns them newest-first, e.g.:
+ * { agreementId, label: "Delivery"|"Completion"|..., amount, blockNumber }
+ */
+async function getCarrierRewardHistory(address) {
+  const c = getContract();
+
+  const [milestoneEvents, completionEvents] = await Promise.all([
+    c.queryFilter(c.filters.ReputationRewarded(address)),
+    c.queryFilter(c.filters.CompletionBonusRewarded(address)),
+  ]);
+
+  const milestoneRows = milestoneEvents.map((e) => ({
+    agreementId: Number(e.args.agreementId),
+    label: REWARD_KIND_LABEL[Number(e.args.rewardKind)],
+    amount: Number(e.args.amount),
+    blockNumber: e.blockNumber,
+  }));
+
+  const completionRows = completionEvents.map((e) => ({
+    agreementId: Number(e.args.agreementId),
+    label: "Completion",
+    amount: Number(e.args.amount),
+    blockNumber: e.blockNumber,
+  }));
+
+  return milestoneRows
+    .concat(completionRows)
+    .sort((a, b) => b.blockNumber - a.blockNumber);
+}
