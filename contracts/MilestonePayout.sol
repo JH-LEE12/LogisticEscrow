@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "./ReputationToken.sol";
+import "./AgreementRegistry.sol";
 
 /// @title MilestonePayout
 /// @notice Member 3's module — Milestone Tracking & Progressive Payout.
-/// Inherits ReputationToken and handles milestone verification & payments.
-abstract contract MilestonePayout is ReputationToken {
+/// Inherits AgreementRegistry directly (decoupled from ReputationToken —
+/// reputation rewards are claimed independently via
+/// ReputationToken.claimCompletionBonus() once an agreement is Completed).
+abstract contract MilestonePayout is AgreementRegistry {
     // ---------------------------------------------------------------------
     // Data Structures
     // ---------------------------------------------------------------------
@@ -35,8 +37,8 @@ abstract contract MilestonePayout is ReputationToken {
     error MilestoneAlreadyPaid();
     error InvalidMilestoneIndex();
     error InvalidMilestoneConfig();
-    error InsufficientContractBalance();
-    error TransferFailed();
+    error MilestoneInsufficientContractBalance();
+    error MilestoneTransferFailed();
 
     // ---------------------------------------------------------------------
     // Events
@@ -127,17 +129,16 @@ abstract contract MilestonePayout is ReputationToken {
             _setStatus(agreementId, AgreementStatus.InProgress);
         }
 
-        // If all milestones paid out, mark agreement completed
+        // If all milestones paid out, mark agreement completed.
+        // Reputation reward is claimed separately via
+        // ReputationToken.claimCompletionBonus() once status is Completed.
         if (totalPaidOut[agreementId] == a.payloadValue) {
             _setStatus(agreementId, AgreementStatus.Completed);
         }
 
-        // Mint Reputation Tokens to the Carrier
-        _mintReputation(a.carrier, MILESTONE_REWARD, "Milestone Completed");
-
         // Payout transfer
         (bool sent, ) = payable(a.carrier).call{value: m.amount}("");
-        if (!sent) revert TransferFailed();
+        if (!sent) revert MilestoneTransferFailed();
 
         emit MilestoneVerified(agreementId, index);
         emit PaymentReleased(agreementId, index, a.carrier, m.amount);

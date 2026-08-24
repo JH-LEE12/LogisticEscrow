@@ -151,9 +151,13 @@ module.exports = {
   },
   compilers: {
     solc: {
-      version: "0.8.20", // matches the pragma in our .sol files
+      version: "0.8.20",
       settings: {
         evmVersion: "london",
+        optimizer: {
+          enabled: true,
+          runs: 200,
+        },
       },
     },
   },
