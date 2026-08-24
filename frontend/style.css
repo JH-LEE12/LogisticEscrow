@@ -298,3 +298,142 @@ table.agreements th {
   font-size: 0.8rem;
   color: var(--color-steel);
 }
+
+/*Create Agreement Form*/
+
+/* The form's fields are wrapped in a <fieldset> so they can all be disabled
+   while a transaction is pending. Strip its default browser chrome. */
+#formFields {
+  border: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-navy);
+}
+
+.form-group input {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1px solid #c8d2dc;
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 0.9rem;
+  color: var(--color-navy);
+  background: var(--color-white);
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: var(--color-steel);
+  box-shadow: 0 0 0 2px rgba(77, 106, 133, 0.12);
+}
+
+.form-group input:disabled {
+  background: var(--color-mist);
+  color: var(--color-steel);
+  cursor: not-allowed;
+}
+
+#statusMessage {
+  margin-top: 16px;
+  font-size: 0.9rem;
+  color: var(--color-steel);
+}
+
+#statusMessage.error {
+  color: var(--color-red);
+  font-weight: 600;
+}
+
+#statusMessage.success {
+  color: var(--color-green);
+  font-weight: 600;
+}
+
+.form-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+/* Success card actions. The link and the button share one box so they line up
+   with identical height, padding and radius: same padding, same line-height,
+   and a 1px border on both (transparent on the primary one) so the secondary
+   button's outline doesn't make it taller. */
+#successCard .form-actions a,
+#successCard .form-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0;
+  padding: 10px 18px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+
+/* Primary action — Return to Dashboard (filled gold, like every other
+   primary button in the app). */
+#successCard .form-actions a {
+  background: var(--color-amber);
+  color: var(--color-navy);
+}
+
+#successCard .form-actions a:hover {
+  filter: brightness(1.08);
+}
+
+/* Secondary action — Create Another Agreement (white with steel outline). */
+#successCard .form-actions button.secondary {
+  background: var(--color-white);
+  color: var(--color-navy);
+  border-color: var(--color-steel);
+}
+
+/* Narrow screens: stack the two actions full-width instead of squashing them. */
+@media (max-width: 480px) {
+  .form-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* Small screens: let the top bar wrap instead of overflowing sideways.
+   Desktop layout is unchanged. */
+@media (max-width: 700px) {
+  header.topbar {
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 12px 16px;
+  }
+
+  nav.tabs {
+    order: 3;
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  main {
+    padding: 24px 16px 48px;
+  }
+}

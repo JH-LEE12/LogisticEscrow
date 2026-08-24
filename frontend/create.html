@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LogisticsEscrow — Create Agreement</title>
+
+    <link rel="stylesheet" href="style.css" />
+
+    <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.umd.min.js"></script>
+  </head>
+
+  <body>
+    <!-- Navigation Bar -->
+    <header class="topbar">
+      <div class="brand">Logistics<span>Escrow</span></div>
+
+      <nav class="tabs">
+        <a href="index.html">Dashboard</a>
+        <a href="create.html" class="active">Create Agreement</a>
+        <a href="milestones.html">Milestones</a>
+        <a href="history.html">History</a>
+        <a href="tokenisation.html">Reputation</a>
+      </nav>
+
+      <div class="wallet-box">
+        <span
+          id="walletAddress"
+          class="wallet-address"
+          style="display: none"
+        ></span>
+
+        <button id="connectBtn" type="button">Connect Wallet</button>
+      </div>
+    </header>
+
+    <main>
+      <!-- Page Introduction -->
+      <section class="card">
+        <h2>Create New Agreement</h2>
+
+        <p class="hint">
+          Create a logistics agreement between you (Shipper) and a registered
+          Carrier.
+        </p>
+      </section>
+
+      <!-- Connect Wallet Message -->
+      <section class="card" id="connectPrompt">
+        <h2>Connect your wallet</h2>
+
+        <p>Connect your MetaMask wallet before creating an agreement.</p>
+      </section>
+
+      <!-- Wrong Role Message -->
+      <section class="card" id="roleWarning" style="display: none">
+        <h2>Shipper Account Required</h2>
+
+        <p>
+          Only a wallet registered as a Shipper can create a logistics
+          agreement.
+        </p>
+
+        <p class="hint">Please register as a Shipper from the Dashboard.</p>
+      </section>
+
+      <!-- Shown when the contract cannot be read (e.g. wrong network) -->
+      <section class="card" id="loadError" style="display: none">
+        <h2>Could Not Read Your Role</h2>
+
+        <p>
+          The contract could not be reached. Check that MetaMask is connected to
+          the correct network (Ganache), then reload the page.
+        </p>
+      </section>
+
+      <!-- Create Agreement Form -->
+      <section class="card" id="createCard" style="display: none">
+        <h2>Agreement Details</h2>
+
+        <form id="createAgreementForm">
+          <!-- All inputs sit in one fieldset so they can be locked together
+               while a transaction is waiting in MetaMask. -->
+          <fieldset id="formFields">
+            <!-- Carrier -->
+            <div class="form-group">
+              <label for="carrierAddress">Carrier Wallet Address</label>
+
+              <input
+                type="text"
+                id="carrierAddress"
+                placeholder="0x..."
+                autocomplete="off"
+                spellcheck="false"
+                required
+              />
+
+              <p class="hint">
+                The address must belong to a registered Carrier.
+              </p>
+            </div>
+
+            <!-- Payload Value -->
+            <div class="form-group">
+              <label for="payloadValue">Payload Value (ETH)</label>
+
+              <input
+                type="number"
+                id="payloadValue"
+                min="0.000001"
+                step="any"
+                placeholder="Example: 0.5"
+                required
+              />
+
+              <p class="hint">
+                Total shipment value. You fund this amount in a later step.
+              </p>
+            </div>
+
+            <!-- Milestones -->
+            <div class="form-group">
+              <label for="milestoneCount">Number of Milestones</label>
+
+              <input
+                type="number"
+                id="milestoneCount"
+                min="1"
+                max="100"
+                step="1"
+                placeholder="Example: 3"
+                required
+              />
+            </div>
+
+            <!-- Duration -->
+            <div class="form-group">
+              <label for="durationDays">Agreement Duration (Days)</label>
+
+              <input
+                type="number"
+                id="durationDays"
+                min="1"
+                max="3650"
+                step="1"
+                placeholder="Example: 7"
+                required
+              />
+            </div>
+          </fieldset>
+
+          <!-- Submit -->
+          <button type="submit" id="createBtn">Create Agreement</button>
+        </form>
+
+        <p id="statusMessage" role="status" aria-live="polite"></p>
+      </section>
+
+      <!-- Success Result -->
+      <section class="card" id="successCard" style="display: none">
+        <h2>Agreement Created Successfully</h2>
+
+        <p>
+          Agreement ID:
+          <strong id="createdAgreementId"></strong>
+        </p>
+
+        <p class="hint">
+          The agreement is recorded on the blockchain with status
+          <strong>Created</strong>. Next, fund it and set up its milestones from
+          the Milestones tab.
+        </p>
+
+        <div class="form-actions">
+          <a href="index.html">Return to Dashboard</a>
+
+          <button type="button" id="createAnotherBtn" class="secondary">
+            Create Another Agreement
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <!-- Shared JavaScript -->
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+
+    <script>
+      const connectBtn = document.getElementById("connectBtn");
+
+      const walletAddressEl = document.getElementById("walletAddress");
+
+      const connectPrompt = document.getElementById("connectPrompt");
+
+      const roleWarning = document.getElementById("roleWarning");
+
+      const loadError = document.getElementById("loadError");
+
+      const createCard = document.getElementById("createCard");
+
+      const form = document.getElementById("createAgreementForm");
+
+      const formFields = document.getElementById("formFields");
+
+      const createBtn = document.getElementById("createBtn");
+
+      const statusMessage = document.getElementById("statusMessage");
+
+      const successCard = document.getElementById("successCard");
+
+      const createAnotherBtn = document.getElementById("createAnotherBtn");
+
+      function shortenAddress(address) {
+        return address.slice(0, 6) + "..." + address.slice(-4);
+      }
+
+      // Shows a message under the form. kind = "" | "error" | "success"
+      function setStatus(text, kind) {
+        statusMessage.textContent = text;
+        statusMessage.className = kind || "";
+      }
+
+      // Turns a MetaMask / ethers failure into something the user can act on,
+      // instead of one generic "something went wrong" line.
+      function describeError(error) {
+        if (error && error.code === "ACTION_REJECTED") {
+          return "Transaction cancelled in MetaMask. Nothing was created.";
+        }
+
+        // Custom errors declared in AgreementRegistry.sol. Ethers can decode
+        // these because config.js ships the full contract ABI.
+        const REVERT_MESSAGES = {
+          NotShipper:
+            "This wallet is not registered as a Shipper, so it cannot create agreements.",
+          CarrierNotRegistered:
+            "That address is not registered as a Carrier. Ask them to register as a Carrier on the Dashboard first.",
+          ZeroAddress: "The Carrier address cannot be the zero address.",
+          ZeroValue:
+            "Payload value and number of milestones must both be greater than zero.",
+          ContractIsPaused:
+            "The contract is currently paused by its owner. Try again later.",
+        };
+
+        const revertName =
+          (error && error.revert && error.revert.name) ||
+          (error && error.errorName);
+
+        if (revertName && REVERT_MESSAGES[revertName]) {
+          return REVERT_MESSAGES[revertName];
+        }
+
+        if (revertName) {
+          return "Transaction rejected by the contract (" + revertName + ").";
+        }
+
+        return "Failed to create agreement. Check that the Carrier is registered and that MetaMask is on the correct network.";
+      }
+
+      // Reads the real agreement ID from the AgreementCreated event in this
+      // transaction's receipt. Falls back to the global counter if the event
+      // cannot be decoded for any reason.
+      async function resolveAgreementId(receipt) {
+        try {
+          const c = getContract();
+
+          for (const log of receipt.logs) {
+            let parsed = null;
+
+            try {
+              parsed = c.interface.parseLog(log);
+            } catch (err) {
+              continue; // Not one of our events — skip it.
+            }
+
+            if (parsed && parsed.name === "AgreementCreated") {
+              return Number(parsed.args.agreementId);
+            }
+          }
+        } catch (err) {
+          console.warn("Could not read AgreementCreated event:", err);
+        }
+
+        return getAgreementCount();
+      }
+
+      // Update page after wallet connection
+      async function refreshPage() {
+        const account = getCurrentAccount();
+
+        if (!account) {
+          return;
+        }
+
+        // Show connected wallet
+        walletAddressEl.textContent = shortenAddress(account);
+
+        walletAddressEl.style.display = "inline-block";
+
+        connectBtn.textContent = "Connected";
+
+        connectBtn.disabled = true;
+
+        connectPrompt.style.display = "none";
+
+        // Check user's registered role
+        let role;
+
+        try {
+          role = await getUserRole(account);
+        } catch (err) {
+          console.error("Could not read user role:", err);
+
+          createCard.style.display = "none";
+
+          roleWarning.style.display = "none";
+
+          loadError.style.display = "block";
+
+          return;
+        }
+
+        loadError.style.display = "none";
+
+        if (role === ROLE.SHIPPER) {
+          roleWarning.style.display = "none";
+
+          createCard.style.display = "block";
+        } else {
+          createCard.style.display = "none";
+
+          roleWarning.style.display = "block";
+        }
+      }
+
+      // Connect MetaMask
+      connectBtn.addEventListener("click", async () => {
+        const account = await connectWallet();
+
+        if (account) {
+          await refreshPage();
+        }
+      });
+
+      // Create Agreement
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        const carrierAddress = document
+          .getElementById("carrierAddress")
+          .value.trim();
+
+        const payloadValue = document.getElementById("payloadValue").value;
+
+        const milestoneCount = Number(
+          document.getElementById("milestoneCount").value,
+        );
+
+        const durationDays = Number(
+          document.getElementById("durationDays").value,
+        );
+
+        // Basic address checking
+        if (!ethers.isAddress(carrierAddress)) {
+          setStatus("Please enter a valid Ethereum address.", "error");
+
+          return;
+        }
+
+        // The Shipper cannot also be the Carrier on the same agreement.
+        const account = getCurrentAccount();
+
+        if (account && carrierAddress.toLowerCase() === account.toLowerCase()) {
+          setStatus(
+            "The Carrier must be a different wallet from your own.",
+            "error",
+          );
+
+          return;
+        }
+
+        try {
+          createBtn.disabled = true;
+
+          // Lock the inputs so what is on screen always matches the
+          // transaction waiting in MetaMask.
+          formFields.disabled = true;
+
+          createBtn.textContent = "Creating...";
+
+          setStatus("Please confirm the transaction in MetaMask.", "");
+
+          // Uses function already provided in app.js
+          const receipt = await createAgreement(
+            carrierAddress,
+            payloadValue,
+            milestoneCount,
+            durationDays,
+          );
+
+          // Use the ID emitted by this transaction, not the global counter
+          const agreementId = await resolveAgreementId(receipt);
+
+          document.getElementById("createdAgreementId").textContent =
+            "#" + agreementId;
+
+          setStatus("", "");
+
+          createCard.style.display = "none";
+
+          successCard.style.display = "block";
+        } catch (error) {
+          console.error("Create agreement error:", error);
+
+          setStatus(describeError(error), "error");
+        } finally {
+          createBtn.disabled = false;
+
+          formFields.disabled = false;
+
+          createBtn.textContent = "Create Agreement";
+        }
+      });
+
+      // Let the user create a second agreement without reloading the page
+      createAnotherBtn.addEventListener("click", () => {
+        form.reset();
+
+        setStatus("", "");
+
+        successCard.style.display = "none";
+
+        createCard.style.display = "block";
+
+        document.getElementById("carrierAddress").focus();
+      });
+
+      // Automatically reconnect MetaMask
+      window.addEventListener("DOMContentLoaded", async () => {
+        const account = await restoreSession();
+
+        if (account) {
+          await refreshPage();
+        }
+      });
+    </script>
+  </body>
+</html>
