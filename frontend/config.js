@@ -14,7 +14,7 @@
 
 window.CHAINCONFIG = {
   // Paste the deployed contract address here after deploying in Remix.
-  contractAddress: "0x0000000000000000000000000000000000000000",
+  contractAddress: "0x9dD7f3Ae91F62B82c35691AA03497d9C3a4323f9",
 
   // ---------------------------------------------------------------
   // ABI below is generated verbatim from build/contracts/LogisticsEscrow.json
