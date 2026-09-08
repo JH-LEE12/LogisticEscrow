@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -21,6 +21,7 @@
         <a href="milestones.html">Milestones</a>
         <a href="history.html">History</a>
         <a href="tokenisation.html">Reputation</a>
+        <a href="analytics.html">Analytics</a>
       </nav>
 
       <div class="wallet-box">
@@ -70,7 +71,7 @@
 
         <p>
           The contract could not be reached. Check that MetaMask is connected to
-          the correct network (Ganache), then reload the page.
+          the correct network, then reload the page.
         </p>
       </section>
 
@@ -167,8 +168,8 @@
 
         <p class="hint">
           The agreement is recorded on the blockchain with status
-          <strong>Created</strong>. Next, fund it and set up its milestones from
-          the Milestones tab.
+          <strong>Created</strong>. Fund it below, then set up its milestones
+          from the Milestones tab.
         </p>
 
         <div class="form-actions">
@@ -178,6 +179,38 @@
             Create Another Agreement
           </button>
         </div>
+
+        <hr
+          style="
+            margin: 24px 0;
+            border: none;
+            border-top: 1px solid var(--color-mist);
+          "
+        />
+
+        <h2>Fund This Agreement</h2>
+
+        <p class="hint">
+          Send exactly the payload value in ETH to lock funds into escrow. The
+          amount must match precisely, or the transaction will be rejected by
+          the contract.
+        </p>
+
+        <div class="form-group">
+          <label for="fundAmount">Amount to Fund (ETH)</label>
+
+          <input
+            type="number"
+            id="fundAmount"
+            min="0.000001"
+            step="any"
+            placeholder="Must match the payload value"
+          />
+        </div>
+
+        <button type="button" id="fundBtn">Fund Agreement</button>
+
+        <p id="fundStatusMessage" role="status" aria-live="polite"></p>
       </section>
     </main>
 
@@ -210,14 +243,30 @@
 
       const createAnotherBtn = document.getElementById("createAnotherBtn");
 
+      const fundBtn = document.getElementById("fundBtn");
+
+      const fundAmountInput = document.getElementById("fundAmount");
+
+      const fundStatusMessage = document.getElementById("fundStatusMessage");
+
+      // Tracks the agreement just created on this page load, so the
+      // Fund button knows which agreement ID to send ETH to.
+      let lastCreatedAgreementId = null;
+
       function shortenAddress(address) {
         return address.slice(0, 6) + "..." + address.slice(-4);
       }
 
-      // Shows a message under the form. kind = "" | "error" | "success"
+      // Shows a message under the create form. kind = "" | "error" | "success"
       function setStatus(text, kind) {
         statusMessage.textContent = text;
         statusMessage.className = kind || "";
+      }
+
+      // Shows a message under the fund form. kind = "" | "error" | "success"
+      function setFundStatus(text, kind) {
+        fundStatusMessage.textContent = text;
+        fundStatusMessage.className = kind || "";
       }
 
       // Turns a MetaMask / ethers failure into something the user can act on,
@@ -227,8 +276,8 @@
           return "Transaction cancelled in MetaMask. Nothing was created.";
         }
 
-        // Custom errors declared in AgreementRegistry.sol. Ethers can decode
-        // these because config.js ships the full contract ABI.
+        // Custom errors declared in AgreementRegistry.sol / Funding.sol.
+        // Ethers can decode these because config.js ships the full contract ABI.
         const REVERT_MESSAGES = {
           NotShipper:
             "This wallet is not registered as a Shipper, so it cannot create agreements.",
@@ -239,6 +288,12 @@
             "Payload value and number of milestones must both be greater than zero.",
           ContractIsPaused:
             "The contract is currently paused by its owner. Try again later.",
+          NotAgreementShipper:
+            "Only the Shipper who created this agreement can fund it.",
+          IncorrectFundingAmount:
+            "The amount sent does not exactly match the agreement's payload value.",
+          WrongStatus:
+            "This agreement is not in the correct state to be funded (it may already be funded).",
         };
 
         const revertName =
@@ -253,7 +308,7 @@
           return "Transaction rejected by the contract (" + revertName + ").";
         }
 
-        return "Failed to create agreement. Check that the Carrier is registered and that MetaMask is on the correct network.";
+        return "Transaction failed. Check the amount and that MetaMask is on the correct network.";
       }
 
       // Reads the real agreement ID from the AgreementCreated event in this
@@ -400,10 +455,18 @@
           // Use the ID emitted by this transaction, not the global counter
           const agreementId = await resolveAgreementId(receipt);
 
+          lastCreatedAgreementId = agreementId;
+
           document.getElementById("createdAgreementId").textContent =
             "#" + agreementId;
 
+          // Pre-fill the fund amount with the payload value just entered,
+          // so the common case (fund immediately, same amount) is one click.
+          fundAmountInput.value = payloadValue;
+
           setStatus("", "");
+
+          setFundStatus("", "");
 
           createCard.style.display = "none";
 
@@ -421,11 +484,68 @@
         }
       });
 
+      // Fund the agreement just created
+      fundBtn.addEventListener("click", async () => {
+        if (lastCreatedAgreementId === null) {
+          setFundStatus(
+            "No agreement to fund yet — create one first.",
+            "error",
+          );
+
+          return;
+        }
+
+        const amount = fundAmountInput.value;
+
+        if (!amount || Number(amount) <= 0) {
+          setFundStatus("Enter a valid ETH amount to fund.", "error");
+
+          return;
+        }
+
+        try {
+          fundBtn.disabled = true;
+
+          fundAmountInput.disabled = true;
+
+          fundBtn.textContent = "Funding...";
+
+          setFundStatus("Please confirm the transaction in MetaMask.", "");
+
+          const c = getContract();
+
+          const tx = await c.fundAgreement(lastCreatedAgreementId, {
+            value: ethers.parseEther(amount.toString()),
+          });
+
+          await tx.wait();
+
+          setFundStatus(
+            "Agreement funded successfully. You can now set up its milestones from the Milestones tab.",
+            "success",
+          );
+        } catch (error) {
+          console.error("Fund agreement error:", error);
+
+          setFundStatus(describeError(error), "error");
+        } finally {
+          fundBtn.disabled = false;
+
+          fundAmountInput.disabled = false;
+
+          fundBtn.textContent = "Fund Agreement";
+        }
+      });
+
       // Let the user create a second agreement without reloading the page
       createAnotherBtn.addEventListener("click", () => {
         form.reset();
 
         setStatus("", "");
+
+        setFundStatus("", "");
+
+        lastCreatedAgreementId = null;
 
         successCard.style.display = "none";
 

@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -16,6 +16,7 @@
         <a href="milestones.html">Milestones</a>
         <a href="history.html" class="active">History</a>
         <a href="tokenisation.html">Reputation</a>
+        <a href="analytics.html">Analytics</a>
       </nav>
       <div class="wallet-box">
         <span
@@ -124,7 +125,9 @@
           <div class="timeline-icon disputed">!</div>
           <div class="timeline-body">
             <h3>Dispute raised</h3>
-            <p>By ${shortenAddress(log.args.raisedBy)} — "${log.args.reason}" · ${timestamp}</p>
+            <p>By ${shortenAddress(log.args.raisedBy)} — "${
+            log.args.reason
+          }" · ${timestamp}</p>
           </div>
         </div>`;
         }
@@ -135,7 +138,9 @@
           <div class="timeline-icon refunded">R</div>
           <div class="timeline-body">
             <h3>Refund issued</h3>
-            <p>${ethers.formatEther(log.args.amount)} ETH to ${shortenAddress(log.args.shipper)} · ${timestamp}</p>
+            <p>${ethers.formatEther(log.args.amount)} ETH to ${shortenAddress(
+            log.args.shipper,
+          )} · ${timestamp}</p>
           </div>
         </div>`;
         }
@@ -146,7 +151,11 @@
           <div class="timeline-icon completed">A</div>
           <div class="timeline-body">
             <h3>Dispute resolved</h3>
-            <p>Arbitrator split — ${ethers.formatEther(log.args.toShipper)} ETH shipper / ${ethers.formatEther(log.args.toCarrier)} ETH carrier · ${timestamp}</p>
+            <p>Arbitrator split — ${ethers.formatEther(
+              log.args.toShipper,
+            )} ETH shipper / ${ethers.formatEther(
+            log.args.toCarrier,
+          )} ETH carrier · ${timestamp}</p>
           </div>
         </div>`;
         }
@@ -208,7 +217,9 @@
         const rows = await Promise.all(
           events.map((e) => renderEvent(e.kind, e.log)),
         );
-        timelineContainer.innerHTML = `<div class="timeline">${rows.join("")}</div>`;
+        timelineContainer.innerHTML = `<div class="timeline">${rows.join(
+          "",
+        )}</div>`;
       }
 
       connectBtn.addEventListener("click", async () => {

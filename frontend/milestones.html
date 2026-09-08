@@ -1,230 +1,273 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>LogisticsEscrow — Milestones</title>
-  <link rel="stylesheet" href="style.css" />
-  <!-- Ethers v6 (matching index.html and history.html) -->
-  <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.umd.min.js"></script>
-</head>
-<body>
-
-  <header class="topbar">
-    <div class="brand">Logistics<span>Escrow</span></div>
-    <nav class="tabs">
-      <a href="index.html">Dashboard</a>
-      <a href="create.html">Create Agreement</a>
-      <a href="milestones.html" class="active">Milestones</a>
-      <a href="history.html">History</a>
-      <a href="tokenisation.html">Reputation</a>
-    </nav>
-    <div class="wallet-box">
-      <span id="walletAddress" class="wallet-address" style="display:none;"></span>
-      <button id="connectBtn">Connect Wallet</button>
-    </div>
-  </header>
-
-  <main>
-    <!-- Connect Wallet Prompt -->
-    <section class="card" id="connectPrompt">
-      <h2>Connect your wallet</h2>
-      <p>Connect MetaMask to set up, submit, or release milestone payments.</p>
-    </section>
-
-    <!-- Lookup / Select Agreement -->
-    <section class="card" id="lookupCard" style="display:none;">
-      <h2>Milestone Management</h2>
-      <p class="hint">Enter an agreement ID to fetch, configure, or action milestones.</p>
-      <div class="lookup-row">
-        <input type="number" id="agreementIdInput" min="1" placeholder="Agreement ID, e.g. 1" />
-        <button id="loadMilestonesBtn">Load Milestones</button>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LogisticsEscrow — Milestones</title>
+    <link rel="stylesheet" href="style.css" />
+    <!-- Ethers v6 (matching index.html and history.html) -->
+    <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.umd.min.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">Logistics<span>Escrow</span></div>
+      <nav class="tabs">
+        <a href="index.html">Dashboard</a>
+        <a href="create.html">Create Agreement</a>
+        <a href="milestones.html" class="active">Milestones</a>
+        <a href="history.html">History</a>
+        <a href="tokenisation.html">Reputation</a>
+        <a href="analytics.html">Analytics</a>
+      </nav>
+      <div class="wallet-box">
+        <span
+          id="walletAddress"
+          class="wallet-address"
+          style="display: none"
+        ></span>
+        <button id="connectBtn">Connect Wallet</button>
       </div>
-    </section>
+    </header>
 
-    <!-- Configure Milestones (Shipper Setup Form) -->
-    <section class="card" id="setupCard" style="display:none;">
-      <h2>Setup Milestones (Shipper)</h2>
-      <p class="hint">Define descriptions and payout amounts in ETH for each milestone. Total ETH must match the payload value.</p>
-      <div id="setupFormContainer"></div>
-      <button id="submitSetupBtn" style="margin-top: 12px;">Confirm & Save Milestones</button>
-    </section>
+    <main>
+      <!-- Connect Wallet Prompt -->
+      <section class="card" id="connectPrompt">
+        <h2>Connect your wallet</h2>
+        <p>
+          Connect MetaMask to set up, submit, or release milestone payments.
+        </p>
+      </section>
 
-    <!-- Milestones Active List -->
-    <section class="card" id="milestonesCard" style="display:none;">
-      <h2 id="milestonesTitle">Agreement Milestones</h2>
-      <div id="milestonesContainer">
-        <p class="empty-state">No milestones loaded.</p>
-      </div>
-    </section>
-  </main>
+      <!-- Lookup / Select Agreement -->
+      <section class="card" id="lookupCard" style="display: none">
+        <h2>Milestone Management</h2>
+        <p class="hint">
+          Enter an agreement ID to fetch, configure, or action milestones.
+        </p>
+        <div class="lookup-row">
+          <input
+            type="number"
+            id="agreementIdInput"
+            min="1"
+            placeholder="Agreement ID, e.g. 1"
+          />
+          <button id="loadMilestonesBtn">Load Milestones</button>
+        </div>
+      </section>
 
-  <script src="config.js"></script>
-  <script src="app.js"></script>
-  <script>
-    const connectBtn = document.getElementById("connectBtn");
-    const walletAddressEl = document.getElementById("walletAddress");
-    const connectPrompt = document.getElementById("connectPrompt");
-    const lookupCard = document.getElementById("lookupCard");
-    const setupCard = document.getElementById("setupCard");
-    const milestonesCard = document.getElementById("milestonesCard");
-    const milestonesTitle = document.getElementById("milestonesTitle");
-    const milestonesContainer = document.getElementById("milestonesContainer");
-    const agreementIdInput = document.getElementById("agreementIdInput");
-    const loadMilestonesBtn = document.getElementById("loadMilestonesBtn");
+      <!-- Configure Milestones (Shipper Setup Form) -->
+      <section class="card" id="setupCard" style="display: none">
+        <h2>Setup Milestones (Shipper)</h2>
+        <p class="hint">
+          Define descriptions and payout amounts in ETH for each milestone.
+          Total ETH must match the payload value.
+        </p>
+        <div id="setupFormContainer"></div>
+        <button id="submitSetupBtn" style="margin-top: 12px">
+          Confirm & Save Milestones
+        </button>
+      </section>
 
-    function shortenAddress(addr) {
-      return addr.slice(0, 6) + "..." + addr.slice(-4);
-    }
+      <!-- Milestones Active List -->
+      <section class="card" id="milestonesCard" style="display: none">
+        <h2 id="milestonesTitle">Agreement Milestones</h2>
+        <div id="milestonesContainer">
+          <p class="empty-state">No milestones loaded.</p>
+        </div>
+      </section>
+    </main>
 
-    function onConnected() {
-      walletAddressEl.textContent = shortenAddress(getCurrentAccount());
-      walletAddressEl.style.display = "inline-block";
-      connectBtn.textContent = "Connected";
-      connectBtn.disabled = true;
-      connectPrompt.style.display = "none";
-      lookupCard.style.display = "block";
-    }
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+    <script>
+      const connectBtn = document.getElementById("connectBtn");
+      const walletAddressEl = document.getElementById("walletAddress");
+      const connectPrompt = document.getElementById("connectPrompt");
+      const lookupCard = document.getElementById("lookupCard");
+      const setupCard = document.getElementById("setupCard");
+      const milestonesCard = document.getElementById("milestonesCard");
+      const milestonesTitle = document.getElementById("milestonesTitle");
+      const milestonesContainer = document.getElementById(
+        "milestonesContainer",
+      );
+      const agreementIdInput = document.getElementById("agreementIdInput");
+      const loadMilestonesBtn = document.getElementById("loadMilestonesBtn");
 
-    // Renders setup fields if Shipper hasn't configured milestones yet
-    async function renderSetupForm(agreement) {
-      const setupFormContainer = document.getElementById("setupFormContainer");
-      setupFormContainer.innerHTML = "";
+      function shortenAddress(addr) {
+        return addr.slice(0, 6) + "..." + addr.slice(-4);
+      }
 
-      for (let i = 0; i < agreement.milestoneCount; i++) {
-        setupFormContainer.innerHTML += `
+      function onConnected() {
+        walletAddressEl.textContent = shortenAddress(getCurrentAccount());
+        walletAddressEl.style.display = "inline-block";
+        connectBtn.textContent = "Connected";
+        connectBtn.disabled = true;
+        connectPrompt.style.display = "none";
+        lookupCard.style.display = "block";
+      }
+
+      // Renders setup fields if Shipper hasn't configured milestones yet
+      async function renderSetupForm(agreement) {
+        const setupFormContainer =
+          document.getElementById("setupFormContainer");
+        setupFormContainer.innerHTML = "";
+
+        for (let i = 0; i < agreement.milestoneCount; i++) {
+          setupFormContainer.innerHTML += `
           <div style="margin-bottom: 12px; display: flex; gap: 8px;">
-            <input type="text" class="m-desc" placeholder="Milestone #${i + 1} Description" style="flex: 2; padding: 8px;" />
+            <input type="text" class="m-desc" placeholder="Milestone #${
+              i + 1
+            } Description" style="flex: 2; padding: 8px;" />
             <input type="number" step="any" class="m-amount" placeholder="Amount (ETH)" style="flex: 1; padding: 8px;" />
           </div>
         `;
-      }
-      setupCard.style.display = "block";
-    }
-
-    // Fetches and displays existing milestones
-    async function loadMilestones(agreementId) {
-      const c = getContract();
-      const agreement = await getAgreement(agreementId);
-      milestonesTitle.textContent = `Agreement #${agreement.id} Milestones`;
-
-      let milestones = [];
-      try {
-        milestones = await c.getMilestones(agreementId);
-      } catch (err) {
-        console.warn("Could not fetch milestones array", err);
-      }
-
-      // If no milestones configured yet, render the Shipper setup form
-      if (!milestones || milestones.length === 0) {
-        milestonesContainer.innerHTML = '<p class="empty-state">No milestones configured for this agreement yet.</p>';
-        const currentAcc = getCurrentAccount();
-        if (currentAcc && currentAcc.toLowerCase() === agreement.shipper.toLowerCase()) {
-          renderSetupForm(agreement);
-        } else {
-          setupCard.style.display = "none";
         }
-        return;
+        setupCard.style.display = "block";
       }
 
-      setupCard.style.display = "none";
+      // Fetches and displays existing milestones
+      async function loadMilestones(agreementId) {
+        const c = getContract();
+        const agreement = await getAgreement(agreementId);
+        milestonesTitle.textContent = `Agreement #${agreement.id} Milestones`;
 
-      // Render existing milestones
-      const rows = milestones.map((m, index) => {
-        const amountEth = ethers.formatEther(m.amount);
-        return `
+        let milestones = [];
+        try {
+          milestones = await c.getMilestones(agreementId);
+        } catch (err) {
+          console.warn("Could not fetch milestones array", err);
+        }
+
+        // If no milestones configured yet, render the Shipper setup form
+        if (!milestones || milestones.length === 0) {
+          milestonesContainer.innerHTML =
+            '<p class="empty-state">No milestones configured for this agreement yet.</p>';
+          const currentAcc = getCurrentAccount();
+          if (
+            currentAcc &&
+            currentAcc.toLowerCase() === agreement.shipper.toLowerCase()
+          ) {
+            renderSetupForm(agreement);
+          } else {
+            setupCard.style.display = "none";
+          }
+          return;
+        }
+
+        setupCard.style.display = "none";
+
+        // Render existing milestones
+        const rows = milestones
+          .map((m, index) => {
+            const amountEth = ethers.formatEther(m.amount);
+            return `
           <div class="timeline-item" style="flex-direction: column; align-items: flex-start; gap: 8px;">
             <div style="display: flex; justify-content: space-between; width: 100%;">
               <h3>Milestone #${index + 1}: ${m.description}</h3>
               <strong>${amountEth} ETH</strong>
             </div>
-            <p>Submitted: ${m.isSubmitted ? "✅ Yes" : "❌ No"} | Paid: ${m.isPaid ? "✅ Paid" : "⏳ Pending"}</p>
+            <p>Submitted: ${m.isSubmitted ? "✅ Yes" : "❌ No"} | Paid: ${
+              m.isPaid ? "✅ Paid" : "⏳ Pending"
+            }</p>
             <div style="display: flex; gap: 10px; margin-top: 6px;">
-              <button onclick="submitMilestone(${agreementId}, ${index})" ${m.isSubmitted ? "disabled" : ""}>Carrier: Submit Work</button>
-              <button onclick="releasePayment(${agreementId}, ${index})" ${!m.isSubmitted || m.isPaid ? "disabled" : ""}>Shipper: Release Payment</button>
+              <button onclick="submitMilestone(${agreementId}, ${index})" ${
+              m.isSubmitted ? "disabled" : ""
+            }>Carrier: Submit Work</button>
+              <button onclick="releasePayment(${agreementId}, ${index})" ${
+              !m.isSubmitted || m.isPaid ? "disabled" : ""
+            }>Shipper: Release Payment</button>
             </div>
           </div>
         `;
-      }).join("");
+          })
+          .join("");
 
-      milestonesContainer.innerHTML = rows;
-    }
-
-    // Configure Milestones call
-    document.getElementById("submitSetupBtn").addEventListener("click", async () => {
-      const id = Number(agreementIdInput.value);
-      const descInputs = document.querySelectorAll(".m-desc");
-      const amountInputs = document.querySelectorAll(".m-amount");
-
-      const descriptions = Array.from(descInputs).map(i => i.value.trim());
-      const amountsWei = Array.from(amountInputs).map(i => ethers.parseEther(i.value || "0"));
-
-      try {
-        const c = getContract();
-        const tx = await c.setupMilestones(id, descriptions, amountsWei);
-        await tx.wait();
-        alert("Milestones configured successfully!");
-        loadMilestones(id);
-      } catch (err) {
-        console.error(err);
-        alert("Error configuring milestones: " + (err.reason || err.message));
+        milestonesContainer.innerHTML = rows;
       }
-    });
 
-    // Action: Submit Milestone Work
-    async function submitMilestone(agreementId, index) {
-      try {
-        const c = getContract();
-        const tx = await c.submitMilestone(agreementId, index);
-        await tx.wait();
-        alert("Milestone work submitted!");
-        loadMilestones(agreementId);
-      } catch (err) {
-        console.error(err);
-        alert("Error submitting milestone: " + (err.reason || err.message));
+      // Configure Milestones call
+      document
+        .getElementById("submitSetupBtn")
+        .addEventListener("click", async () => {
+          const id = Number(agreementIdInput.value);
+          const descInputs = document.querySelectorAll(".m-desc");
+          const amountInputs = document.querySelectorAll(".m-amount");
+
+          const descriptions = Array.from(descInputs).map((i) =>
+            i.value.trim(),
+          );
+          const amountsWei = Array.from(amountInputs).map((i) =>
+            ethers.parseEther(i.value || "0"),
+          );
+
+          try {
+            const c = getContract();
+            const tx = await c.setupMilestones(id, descriptions, amountsWei);
+            await tx.wait();
+            alert("Milestones configured successfully!");
+            loadMilestones(id);
+          } catch (err) {
+            console.error(err);
+            alert(
+              "Error configuring milestones: " + (err.reason || err.message),
+            );
+          }
+        });
+
+      // Action: Submit Milestone Work
+      async function submitMilestone(agreementId, index) {
+        try {
+          const c = getContract();
+          const tx = await c.submitMilestone(agreementId, index);
+          await tx.wait();
+          alert("Milestone work submitted!");
+          loadMilestones(agreementId);
+        } catch (err) {
+          console.error(err);
+          alert("Error submitting milestone: " + (err.reason || err.message));
+        }
       }
-    }
 
-    // Action: Verify & Release Payment
-    async function releasePayment(agreementId, index) {
-      try {
-        const c = getContract();
-        const tx = await c.verifyAndReleaseMilestone(agreementId, index);
-        await tx.wait();
-        alert("Payment released successfully!");
-        loadMilestones(agreementId);
-      } catch (err) {
-        console.error(err);
-        alert("Error releasing payment: " + (err.reason || err.message));
+      // Action: Verify & Release Payment
+      async function releasePayment(agreementId, index) {
+        try {
+          const c = getContract();
+          const tx = await c.verifyAndReleaseMilestone(agreementId, index);
+          await tx.wait();
+          alert("Payment released successfully!");
+          loadMilestones(agreementId);
+        } catch (err) {
+          console.error(err);
+          alert("Error releasing payment: " + (err.reason || err.message));
+        }
       }
-    }
 
-    async function claimBonus(agreementId) {
-      try {
-        await claimCompletionBonus(agreementId);
-        alert("50 LRT Completion Bonus claimed successfully!");
-      } catch (err) {
-        console.error(err);
-        alert("Error claiming bonus: " + (err.reason || err.message));
+      async function claimBonus(agreementId) {
+        try {
+          await claimCompletionBonus(agreementId);
+          alert("50 LRT Completion Bonus claimed successfully!");
+        } catch (err) {
+          console.error(err);
+          alert("Error claiming bonus: " + (err.reason || err.message));
+        }
       }
-    }
 
-    connectBtn.addEventListener("click", async () => {
-      const account = await connectWallet();
-      if (account) onConnected();
-    });
+      connectBtn.addEventListener("click", async () => {
+        const account = await connectWallet();
+        if (account) onConnected();
+      });
 
-    loadMilestonesBtn.addEventListener("click", async () => {
-      const id = Number(agreementIdInput.value);
-      if (!id || id < 1) return alert("Please enter a valid Agreement ID.");
-      milestonesCard.style.display = "block";
-      await loadMilestones(id);
-    });
+      loadMilestonesBtn.addEventListener("click", async () => {
+        const id = Number(agreementIdInput.value);
+        if (!id || id < 1) return alert("Please enter a valid Agreement ID.");
+        milestonesCard.style.display = "block";
+        await loadMilestones(id);
+      });
 
-    window.addEventListener("DOMContentLoaded", async () => {
-      const account = await restoreSession();
-      if (account) onConnected();
-    });
-  </script>
-</body>
+      window.addEventListener("DOMContentLoaded", async () => {
+        const account = await restoreSession();
+        if (account) onConnected();
+      });
+    </script>
+  </body>
 </html>

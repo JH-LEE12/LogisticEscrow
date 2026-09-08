@@ -160,3 +160,7 @@ migrations/4_deploy_test_funding.js
 # Ignore testing files (Tokenisation module)
 contracts/TokenisationTest.sol
 migrations/5_deploy_tokenisation_test.js
+
+
+#Ignore private info
+.env

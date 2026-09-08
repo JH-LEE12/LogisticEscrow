@@ -437,3 +437,33 @@ table.agreements th {
     padding: 24px 16px 48px;
   }
 }
+
+/* Analytics page additions — append these to the end of style.css.
+   Uses the same CSS variables already defined at the top of style.css. */
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+}
+
+.stat-box {
+  background: var(--color-mist);
+  border-radius: var(--radius);
+  padding: 20px;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--color-navy);
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  color: var(--color-steel);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-top: 4px;
+}

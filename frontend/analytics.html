@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LogisticsEscrow — Analytics</title>
+    <link rel="stylesheet" href="style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.umd.min.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">Logistics<span>Escrow</span></div>
+      <nav class="tabs">
+        <a href="index.html">Dashboard</a>
+        <a href="create.html">Create Agreement</a>
+        <a href="milestones.html">Milestones</a>
+        <a href="history.html">History</a>
+        <a href="tokenisation.html">Reputation</a>
+        <a href="analytics.html" class="active">Analytics</a>
+      </nav>
+      <div class="wallet-box">
+        <span
+          id="walletAddress"
+          class="wallet-address"
+          style="display: none"
+        ></span>
+        <button id="connectBtn">Connect Wallet</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="card">
+        <h2>System Analytics</h2>
+        <p class="hint">
+          Live statistics computed directly from on-chain data — no separate
+          database, everything shown here is read straight from the deployed
+          contract.
+        </p>
+      </section>
+
+      <section class="card" id="connectPrompt">
+        <h2>Connect your wallet</h2>
+        <p>Connect MetaMask to load system-wide statistics.</p>
+      </section>
+
+      <section class="card" id="statsCard" style="display: none">
+        <h2>Overview</h2>
+        <div id="statsGrid" class="stats-grid">
+          <p class="empty-state">Loading...</p>
+        </div>
+      </section>
+
+      <section class="card" id="breakdownCard" style="display: none">
+        <h2>Agreement Status Breakdown</h2>
+        <div id="statusBreakdown">
+          <p class="empty-state">Loading...</p>
+        </div>
+      </section>
+    </main>
+
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+    <script>
+      const connectBtn = document.getElementById("connectBtn");
+      const walletAddressEl = document.getElementById("walletAddress");
+      const connectPrompt = document.getElementById("connectPrompt");
+      const statsCard = document.getElementById("statsCard");
+      const breakdownCard = document.getElementById("breakdownCard");
+      const statsGrid = document.getElementById("statsGrid");
+      const statusBreakdown = document.getElementById("statusBreakdown");
+
+      function shortenAddress(addr) {
+        return addr.slice(0, 6) + "..." + addr.slice(-4);
+      }
+
+      function statCard(label, value) {
+        return `
+        <div class="stat-box">
+          <div class="stat-value">${value}</div>
+          <div class="stat-label">${label}</div>
+        </div>`;
+      }
+
+      async function loadAnalytics() {
+        const c = getContract();
+
+        statsGrid.innerHTML = '<p class="empty-state">Loading...</p>';
+        statusBreakdown.innerHTML = '<p class="empty-state">Loading...</p>';
+
+        // Total agreements — direct view call, no loop needed
+        const totalAgreements = Number(await c.agreementCount());
+
+        // Loop through every agreement once to compute aggregate stats.
+        // Fine for a class-project dataset; a production app would index
+        // this off-chain instead of looping on every page load.
+        let totalEscrowedWei = 0n;
+        let completed = 0;
+        let refunded = 0;
+        let disputed = 0;
+        let inProgress = 0;
+        let fundedOnly = 0;
+        let createdOnly = 0;
+
+        const STATUS_CREATED = 0;
+        const STATUS_FUNDED = 1;
+        const STATUS_INPROGRESS = 2;
+        const STATUS_COMPLETED = 3;
+        const STATUS_REFUNDED = 4;
+        const STATUS_DISPUTED = 5;
+
+        for (let id = 1; id <= totalAgreements; id++) {
+          const a = await c.getAgreement(id);
+          const status = Number(a.status);
+
+          if (status !== STATUS_CREATED) {
+            totalEscrowedWei += BigInt(a.payloadValue);
+          }
+
+          if (status === STATUS_COMPLETED) completed++;
+          else if (status === STATUS_REFUNDED) refunded++;
+          else if (status === STATUS_DISPUTED) disputed++;
+          else if (status === STATUS_INPROGRESS) inProgress++;
+          else if (status === STATUS_FUNDED) fundedOnly++;
+          else createdOnly++;
+        }
+
+        const completionRate =
+          totalAgreements > 0
+            ? ((completed / totalAgreements) * 100).toFixed(1)
+            : "0.0";
+
+        // Total LRT reputation tokens minted system-wide, if the contract
+        // includes the Tokenisation module.
+        let totalLRT = "N/A";
+        try {
+          const supply = await c.totalSupply();
+          totalLRT = supply.toString();
+        } catch (err) {
+          console.warn("totalSupply() not available on this contract:", err);
+        }
+
+        statsGrid.innerHTML = [
+          statCard("Total Agreements", totalAgreements),
+          statCard(
+            "Total ETH Escrowed",
+            ethers.formatEther(totalEscrowedWei) + " ETH",
+          ),
+          statCard("Completion Rate", completionRate + "%"),
+          statCard("Total LRT Minted", totalLRT),
+        ].join("");
+
+        statusBreakdown.innerHTML = `
+        <table class="agreements">
+          <thead>
+            <tr><th>Status</th><th>Count</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Created (not yet funded)</td><td>${createdOnly}</td></tr>
+            <tr><td>Funded</td><td>${fundedOnly}</td></tr>
+            <tr><td>In Progress</td><td>${inProgress}</td></tr>
+            <tr><td>Completed</td><td>${completed}</td></tr>
+            <tr><td>Refunded</td><td>${refunded}</td></tr>
+            <tr><td>Disputed</td><td>${disputed}</td></tr>
+          </tbody>
+        </table>`;
+      }
+
+      function onConnected() {
+        walletAddressEl.textContent = shortenAddress(getCurrentAccount());
+        walletAddressEl.style.display = "inline-block";
+        connectBtn.textContent = "Connected";
+        connectBtn.disabled = true;
+        connectPrompt.style.display = "none";
+        statsCard.style.display = "block";
+        breakdownCard.style.display = "block";
+        loadAnalytics().catch((err) => {
+          console.error(err);
+          statsGrid.innerHTML =
+            '<p class="empty-state">Could not load analytics. Check the console for details.</p>';
+        });
+      }
+
+      connectBtn.addEventListener("click", async () => {
+        const account = await connectWallet();
+        if (account) onConnected();
+      });
+
+      window.addEventListener("DOMContentLoaded", async () => {
+        const account = await restoreSession();
+        if (account) onConnected();
+      });
+    </script>
+  </body>
+</html>
