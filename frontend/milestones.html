@@ -75,6 +75,29 @@
           <p class="empty-state">No milestones loaded.</p>
         </div>
       </section>
+
+      <!-- Completion Bonus -->
+      <section class="card" id="completionCard" style="display: none">
+        <h2>Agreement Complete</h2>
+        <p class="hint">
+          All milestones have been paid. The Carrier may claim a one-time
+          reputation completion bonus for this agreement.
+        </p>
+        <button id="claimCompletionBtn">Claim Completion Bonus</button>
+        <p id="completionStatusMessage" role="status" aria-live="polite"></p>
+      </section>
+
+      <!-- Refund (available on any agreement, any caller, once deadline passes) -->
+      <section class="card" id="refundCard" style="display: none">
+        <h2>Deadline Passed — Refund Available</h2>
+        <p class="hint">
+          This agreement's deadline has passed with no milestones paid out.
+          Anyone may trigger the automatic refund below — it returns the full
+          payload value to the Shipper and closes the agreement.
+        </p>
+        <button id="triggerRefundBtn">Check &amp; Trigger Refund</button>
+        <p id="refundStatusMessage" role="status" aria-live="polite"></p>
+      </section>
     </main>
 
     <script src="config.js"></script>
@@ -92,9 +115,40 @@
       );
       const agreementIdInput = document.getElementById("agreementIdInput");
       const loadMilestonesBtn = document.getElementById("loadMilestonesBtn");
+      const completionCard = document.getElementById("completionCard");
+      const claimCompletionBtn = document.getElementById("claimCompletionBtn");
+      const completionStatusMessage = document.getElementById(
+        "completionStatusMessage",
+      );
+      const refundCard = document.getElementById("refundCard");
+      const triggerRefundBtn = document.getElementById("triggerRefundBtn");
+      const refundStatusMessage = document.getElementById(
+        "refundStatusMessage",
+      );
+
+      // Mirrors TokenisationModule.sol -> enum RewardKind { Pickup, Intermediate, Delivery }
+      const REWARD_KIND_OPTIONS = [
+        { value: 0, label: "Pickup" },
+        { value: 1, label: "Intermediate" },
+        { value: 2, label: "Delivery" },
+      ];
+
+      // Tracks the currently loaded agreement so the completion / refund
+      // sections know which ID to act on.
+      let currentAgreementId = null;
 
       function shortenAddress(addr) {
         return addr.slice(0, 6) + "..." + addr.slice(-4);
+      }
+
+      function setCompletionStatus(text, kind) {
+        completionStatusMessage.textContent = text;
+        completionStatusMessage.className = kind || "";
+      }
+
+      function setRefundStatus(text, kind) {
+        refundStatusMessage.textContent = text;
+        refundStatusMessage.className = kind || "";
       }
 
       function onConnected() {
@@ -125,11 +179,41 @@
         setupCard.style.display = "block";
       }
 
+      // Builds the "Reward this milestone" control row for a paid,
+      // not-yet-rewarded milestone. Kept separate from the main row so a
+      // failed/duplicate reward attempt doesn't disturb the submit/release
+      // buttons above it.
+      function rewardControlsHtml(agreementId, index) {
+        const options = REWARD_KIND_OPTIONS.map(
+          (o) => `<option value="${o.value}">${o.label}</option>`,
+        ).join("");
+
+        return `
+          <div class="reward-row" style="display:flex; gap:8px; align-items:center; margin-top:6px;">
+            <select id="rewardKind-${agreementId}-${index}">${options}</select>
+            <button onclick="rewardMilestone(${agreementId}, ${index})">
+              Reward This Milestone
+            </button>
+            <span id="rewardMsg-${agreementId}-${index}" class="hint"></span>
+          </div>`;
+      }
+
       // Fetches and displays existing milestones
       async function loadMilestones(agreementId) {
         const c = getContract();
         const agreement = await getAgreement(agreementId);
         milestonesTitle.textContent = `Agreement #${agreement.id} Milestones`;
+        currentAgreementId = agreementId;
+
+        // Refund is available on ANY agreement once its deadline has
+        // passed, regardless of whether milestones exist yet — check this
+        // up front so the section can show even before setup is done.
+        const now = new Date();
+        const deadlinePassed = agreement.deadline < now;
+        const refundableStatus = agreement.statusLabel === "Funded"; // matches checkAndTriggerRefund's atStatus guard
+        refundCard.style.display =
+          deadlinePassed && refundableStatus ? "block" : "none";
+        setRefundStatus("", "");
 
         let milestones = [];
         try {
@@ -142,6 +226,7 @@
         if (!milestones || milestones.length === 0) {
           milestonesContainer.innerHTML =
             '<p class="empty-state">No milestones configured for this agreement yet.</p>';
+          completionCard.style.display = "none";
           const currentAcc = getCurrentAccount();
           if (
             currentAcc &&
@@ -160,6 +245,9 @@
         const rows = milestones
           .map((m, index) => {
             const amountEth = ethers.formatEther(m.amount);
+            const rewardBlock = m.isPaid
+              ? rewardControlsHtml(agreementId, index)
+              : "";
             return `
           <div class="timeline-item" style="flex-direction: column; align-items: flex-start; gap: 8px;">
             <div style="display: flex; justify-content: space-between; width: 100%;">
@@ -177,12 +265,20 @@
               !m.isSubmitted || m.isPaid ? "disabled" : ""
             }>Shipper: Release Payment</button>
             </div>
+            ${rewardBlock}
           </div>
         `;
           })
           .join("");
 
         milestonesContainer.innerHTML = rows;
+
+        // Show the completion bonus card once the agreement itself is
+        // Completed (all milestones paid) — matches the contract's own
+        // AgreementStatus.Completed transition.
+        setCompletionStatus("", "");
+        completionCard.style.display =
+          agreement.statusLabel === "Completed" ? "block" : "none";
       }
 
       // Configure Milestones call
@@ -242,15 +338,102 @@
         }
       }
 
-      async function claimBonus(agreementId) {
+      // Action: Reward a paid milestone with reputation tokens.
+      // Calls TokenisationModule's rewardMilestone() via the LogisticsEscrow
+      // trigger function — internal-only reward logic, this is the only way
+      // to call it (see LogisticsEscrow.sol's rewardMilestone wrapper).
+      async function rewardMilestone(agreementId, index) {
+        const select = document.getElementById(
+          `rewardKind-${agreementId}-${index}`,
+        );
+        const msgEl = document.getElementById(
+          `rewardMsg-${agreementId}-${index}`,
+        );
+        const rewardKind = Number(select.value);
+
         try {
-          await claimCompletionBonus(agreementId);
-          alert("50 LRT Completion Bonus claimed successfully!");
+          msgEl.textContent = "Confirm in MetaMask...";
+          const c = getContract();
+          const tx = await c.rewardMilestone(agreementId, index, rewardKind);
+          await tx.wait();
+          msgEl.textContent = "Rewarded!";
         } catch (err) {
           console.error(err);
-          alert("Error claiming bonus: " + (err.reason || err.message));
+          msgEl.textContent =
+            "Error: " + (err.reason || err.errorName || err.message);
         }
       }
+
+      // Action: claim the one-time completion bonus for a Completed agreement.
+      // NOTE: this calls rewardCompletion() on the LIVE deployed contract
+      // (LogisticsEscrow + TokenisationModule), NOT the old
+      // claimCompletionBonus() from ReputationToken.sol, which is not part
+      // of the final deployed system.
+      claimCompletionBtn.addEventListener("click", async () => {
+        if (currentAgreementId === null) {
+          setCompletionStatus("No agreement loaded.", "error");
+          return;
+        }
+
+        try {
+          claimCompletionBtn.disabled = true;
+          claimCompletionBtn.textContent = "Claiming...";
+          setCompletionStatus("Confirm in MetaMask...", "");
+
+          const c = getContract();
+          const tx = await c.rewardCompletion(currentAgreementId);
+          await tx.wait();
+
+          setCompletionStatus(
+            "Completion bonus claimed successfully. Check the Reputation tab for your updated balance.",
+            "success",
+          );
+        } catch (err) {
+          console.error(err);
+          setCompletionStatus(
+            "Error: " + (err.reason || err.errorName || err.message),
+            "error",
+          );
+        } finally {
+          claimCompletionBtn.disabled = false;
+          claimCompletionBtn.textContent = "Claim Completion Bonus";
+        }
+      });
+
+      // Action: trigger the automatic refund once a deadline has passed.
+      // No caller restriction on the contract side — anyone may call this,
+      // by design, so a stuck agreement can always be resolved.
+      triggerRefundBtn.addEventListener("click", async () => {
+        if (currentAgreementId === null) {
+          setRefundStatus("No agreement loaded.", "error");
+          return;
+        }
+
+        try {
+          triggerRefundBtn.disabled = true;
+          triggerRefundBtn.textContent = "Processing...";
+          setRefundStatus("Confirm in MetaMask...", "");
+
+          const c = getContract();
+          const tx = await c.checkAndTriggerRefund(currentAgreementId);
+          await tx.wait();
+
+          setRefundStatus(
+            "Refund issued successfully. The full payload value has been returned to the Shipper.",
+            "success",
+          );
+          loadMilestones(currentAgreementId);
+        } catch (err) {
+          console.error(err);
+          setRefundStatus(
+            "Error: " + (err.reason || err.errorName || err.message),
+            "error",
+          );
+        } finally {
+          triggerRefundBtn.disabled = false;
+          triggerRefundBtn.textContent = "Check & Trigger Refund";
+        }
+      });
 
       connectBtn.addEventListener("click", async () => {
         const account = await connectWallet();
