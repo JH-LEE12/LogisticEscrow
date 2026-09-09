@@ -163,6 +163,11 @@
         return "";
       }
 
+      // Public Sepolia RPC providers cap eth_getLogs to a 10,000-block range
+      // per request. Querying from block 0 fails once the chain has grown
+      // past that. Start from this contract's actual deployment block instead.
+      const DEPLOYMENT_BLOCK = 11656900;
+
       async function loadHistory(agreementId) {
         const c = getContract();
 
@@ -174,6 +179,7 @@
 
         const statusLogs = await c.queryFilter(
           c.filters.AgreementStatusChanged(agreementId),
+          DEPLOYMENT_BLOCK,
         );
         for (const log of statusLogs) events.push({ kind: "status", log });
 
@@ -183,16 +189,19 @@
         try {
           const disputeLogs = await c.queryFilter(
             c.filters.DisputeRaised(agreementId),
+            DEPLOYMENT_BLOCK,
           );
           for (const log of disputeLogs) events.push({ kind: "dispute", log });
 
           const refundLogs = await c.queryFilter(
             c.filters.RefundIssued(agreementId),
+            DEPLOYMENT_BLOCK,
           );
           for (const log of refundLogs) events.push({ kind: "refund", log });
 
           const resolvedLogs = await c.queryFilter(
             c.filters.DisputeResolved(agreementId),
+            DEPLOYMENT_BLOCK,
           );
           for (const log of resolvedLogs)
             events.push({ kind: "resolved", log });

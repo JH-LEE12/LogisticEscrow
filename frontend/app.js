@@ -209,9 +209,15 @@ const REWARD_KIND_LABEL = ["Pickup", "In Transit", "Delivery"];
 async function getCarrierRewardHistory(address) {
   const c = getContract();
 
+  // Sepolia (and most public RPC providers) cap eth_getLogs to a 10,000-block
+  // range per request. Querying from block 0 fails once the chain has grown
+  // past that. Start from this contract's actual deployment block instead —
+  // nothing relevant could have happened before that anyway.
+  const DEPLOYMENT_BLOCK = 11656900;
+
   const [milestoneEvents, completionEvents] = await Promise.all([
-    c.queryFilter(c.filters.ReputationRewarded(address)),
-    c.queryFilter(c.filters.CompletionBonusRewarded(address)),
+    c.queryFilter(c.filters.ReputationRewarded(address), DEPLOYMENT_BLOCK),
+    c.queryFilter(c.filters.CompletionBonusRewarded(address), DEPLOYMENT_BLOCK),
   ]);
 
   const milestoneRows = milestoneEvents.map((e) => ({
