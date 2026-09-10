@@ -18,6 +18,38 @@ const ROLE_LABEL = ["Not registered", "Shipper", "Carrier"];
 // Mirrors AgreementRegistry.sol -> enum AgreementStatus
 const STATUS_LABEL = ["Created", "Funded", "In Progress", "Completed", "Refunded", "Disputed"];
 
+// The block this contract was deployed in — nothing relevant can predate it.
+const DEPLOYMENT_BLOCK = 11656900;
+
+// Sepolia RPC providers (including the Infura endpoint MetaMask reads through)
+// reject any eth_getLogs spanning more than 10,000 blocks. Stay clear of it.
+const LOG_CHUNK = 9000;
+
+/**
+ * Same contract.queryFilter(), but split into windows the RPC will accept.
+ *
+ * ethers defaults toBlock to "latest" when you only pass fromBlock, so a single
+ * call covers the whole chain since deployment and grows by a block every ~12s.
+ * Once that span passed 10,000 the node started rejecting it outright with
+ * `-32602 range N exceeds limit of 10000`, which is what broke the History and
+ * Reputation pages. Passing an explicit toBlock on every request fixes it for
+ * good — the loop grows with the chain instead of overflowing.
+ */
+async function queryFilterChunked(contract, filter, fromBlock = DEPLOYMENT_BLOCK) {
+  // runner is a Signer here (getContract() builds with one), so the provider
+  // hangs off it — but fall back in case a read-only provider is used later.
+  const runner = contract.runner;
+  const latest = await (runner.provider ?? runner).getBlockNumber();
+  const logs = [];
+
+  for (let start = fromBlock; start <= latest; start += LOG_CHUNK) {
+    const end = Math.min(start + LOG_CHUNK - 1, latest);
+    logs.push(...(await contract.queryFilter(filter, start, end)));
+  }
+
+  return logs;
+}
+
 /**
  * Prompts MetaMask to connect, then sets up the ethers provider/signer/contract.
  * Call this from a "Connect Wallet" button.
@@ -209,15 +241,9 @@ const REWARD_KIND_LABEL = ["Pickup", "In Transit", "Delivery"];
 async function getCarrierRewardHistory(address) {
   const c = getContract();
 
-  // Sepolia (and most public RPC providers) cap eth_getLogs to a 10,000-block
-  // range per request. Querying from block 0 fails once the chain has grown
-  // past that. Start from this contract's actual deployment block instead —
-  // nothing relevant could have happened before that anyway.
-  const DEPLOYMENT_BLOCK = 11656900;
-
   const [milestoneEvents, completionEvents] = await Promise.all([
-    c.queryFilter(c.filters.ReputationRewarded(address), DEPLOYMENT_BLOCK),
-    c.queryFilter(c.filters.CompletionBonusRewarded(address), DEPLOYMENT_BLOCK),
+    queryFilterChunked(c, c.filters.ReputationRewarded(address)),
+    queryFilterChunked(c, c.filters.CompletionBonusRewarded(address)),
   ]);
 
   const milestoneRows = milestoneEvents.map((e) => ({
