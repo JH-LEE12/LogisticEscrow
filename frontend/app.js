@@ -16,7 +16,14 @@ const ROLE = { NONE: 0, SHIPPER: 1, CARRIER: 2 };
 const ROLE_LABEL = ["Not registered", "Shipper", "Carrier"];
 
 // Mirrors AgreementRegistry.sol -> enum AgreementStatus
-const STATUS_LABEL = ["Created", "Funded", "In Progress", "Completed", "Refunded", "Disputed"];
+const STATUS_LABEL = [
+  "Created",
+  "Funded",
+  "In Progress",
+  "Completed",
+  "Refunded",
+  "Disputed",
+];
 
 // The block this contract was deployed in — nothing relevant can predate it.
 const DEPLOYMENT_BLOCK = 11656900;
@@ -35,7 +42,11 @@ const LOG_CHUNK = 9000;
  * Reputation pages. Passing an explicit toBlock on every request fixes it for
  * good — the loop grows with the chain instead of overflowing.
  */
-async function queryFilterChunked(contract, filter, fromBlock = DEPLOYMENT_BLOCK) {
+async function queryFilterChunked(
+  contract,
+  filter,
+  fromBlock = DEPLOYMENT_BLOCK,
+) {
   // runner is a Signer here (getContract() builds with one), so the provider
   // hangs off it — but fall back in case a read-only provider is used later.
   const runner = contract.runner;
@@ -56,12 +67,16 @@ async function queryFilterChunked(contract, filter, fromBlock = DEPLOYMENT_BLOCK
  */
 async function connectWallet() {
   if (!window.ethereum) {
-    alert("MetaMask not detected. Please install the MetaMask browser extension to use this dApp.");
+    alert(
+      "MetaMask not detected. Please install the MetaMask browser extension to use this dApp.",
+    );
     return null;
   }
 
   try {
-    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+    const accounts = await window.ethereum.request({
+      method: "eth_requestAccounts",
+    });
     currentAccount = accounts[0];
 
     provider = new ethers.BrowserProvider(window.ethereum);
@@ -69,7 +84,7 @@ async function connectWallet() {
     contract = new ethers.Contract(
       window.CHAINCONFIG.contractAddress,
       window.CHAINCONFIG.contractABI,
-      signer
+      signer,
     );
 
     // Reload automatically if the user switches account or network in MetaMask,
@@ -99,7 +114,8 @@ async function restoreSession() {
 }
 
 function getContract() {
-  if (!contract) throw new Error("Wallet not connected yet — call connectWallet() first.");
+  if (!contract)
+    throw new Error("Wallet not connected yet — call connectWallet() first.");
   return contract;
 }
 
@@ -130,10 +146,20 @@ async function getUserRole(address) {
  * @param {number} milestoneCount
  * @param {number} durationInDays
  */
-async function createAgreement(carrierAddress, payloadValueEth, milestoneCount, durationInDays) {
+async function createAgreement(
+  carrierAddress,
+  payloadValueEth,
+  milestoneCount,
+  durationInDays,
+) {
   const c = getContract();
   const payloadValueWei = ethers.parseEther(payloadValueEth.toString());
-  const tx = await c.createAgreement(carrierAddress, payloadValueWei, milestoneCount, durationInDays);
+  const tx = await c.createAgreement(
+    carrierAddress,
+    payloadValueWei,
+    milestoneCount,
+    durationInDays,
+  );
   return tx.wait();
 }
 
@@ -152,7 +178,7 @@ async function getAgreement(agreementId) {
     deadline: new Date(Number(a.deadline) * 1000),
     createdAt: new Date(Number(a.createdAt) * 1000),
     statusCode: Number(a.status),
-    statusLabel: STATUS_LABEL[Number(a.status)]
+    statusLabel: STATUS_LABEL[Number(a.status)],
   };
 }
 
@@ -184,11 +210,14 @@ async function getMyAgreements(address) {
 
 /**
  * Fetches the LRT reputation token balance for an address.
+ * TokenisationModule.decimals() == 0, so this is a plain integer —
+ * no ethers.formatEther needed (that was the bug: dividing by 10^18
+ * on a token that has no decimals at all).
  */
 async function getReputationBalance(address) {
   const c = getContract();
-  const balanceWei = await c.balanceOf(address);
-  return ethers.formatEther(balanceWei); // Returns formatted number, e.g., "10.0"
+  const balance = await c.balanceOf(address);
+  return balance.toString();
 }
 
 /**

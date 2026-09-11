@@ -20,7 +20,7 @@ async function main() {
   // CONFIGURE THESE
   // ---------------------------------------------------------------
 
-  const PRIVATE_KEY = "PASTE_A_FRESH_PRIVATE_KEY_HERE_BEFORE_RUNNING";
+  const PRIVATE_KEY = "PASTE_A_FRESH_PRIVATE_KEY_HERE_BEFORE_RUNNING"; //Demo purpose
   const CONTRACT_ADDRESS = "0x9dD7f3Ae91F62B82c35691AA03497d9C3a4323f9";
 
   // Chain ID: 1337 for Ganache (check your Ganache window to confirm),

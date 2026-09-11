@@ -17,6 +17,7 @@
     "@truffle/hdwallet-provider": "^2.1.15",
     "dotenv": "^17.4.2",
     "ethers": "^6.17.0",
+    "merkletreejs": "^0.6.0",
     "truffle-plugin-verify": "^0.6.7"
   }
 }
