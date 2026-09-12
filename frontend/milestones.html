@@ -133,9 +133,9 @@
 
       // Mirrors TokenisationModule.sol -> enum RewardKind { Pickup, Intermediate, Delivery }
       const REWARD_KIND_OPTIONS = [
-        { value: 0, label: "Pickup" },
-        { value: 1, label: "Intermediate" },
-        { value: 2, label: "Delivery" },
+        { value: 0, label: "Pickup", amount: 10 },
+        { value: 1, label: "Intermediate", amount: 10 },
+        { value: 2, label: "Delivery", amount: 30 },
       ];
 
       // Tracks the currently loaded agreement so the completion / refund
@@ -241,23 +241,20 @@
       // buttons above it. Only rendered as interactive for the connected
       // agreement's own shipper/carrier — anyone else would just hit
       // NotParticipant, so show them why instead of a live control.
-      function rewardControlsHtml(agreementId, index, isParticipant, isRewarded) {
-        if (isRewarded) {
-          return `<p class="hint" style="margin-top:6px;">✅ Reward already claimed for this milestone.</p>`;
-        }
-        if (!isParticipant) {
-          return `<p class="hint" style="margin-top:6px;">Connect as this agreement's Shipper or Carrier to reward this milestone.</p>`;
-        }
+      function rewardControlsHtml(agreementId, index) {
+        // Only rendered by loadMilestones() for this agreement's Shipper on a
+        // paid, not-yet-rewarded milestone, so no extra gating is needed here.
 
         const options = REWARD_KIND_OPTIONS.map(
-          (o) => `<option value="${o.value}">${o.label}</option>`,
+          (o) =>
+            `<option value="${o.value}">${o.label} (+${o.amount} LRT to Carrier)</option>`,
         ).join("");
 
         return `
           <div class="reward-row" style="display:flex; gap:8px; align-items:center; margin-top:6px;">
             <select id="rewardKind-${agreementId}-${index}">${options}</select>
             <button onclick="rewardMilestone(${agreementId}, ${index})">
-              Reward This Milestone
+              Reward This Milestone (Tokens)
             </button>
             <span id="rewardMsg-${agreementId}-${index}" class="hint"></span>
           </div>`;
@@ -266,16 +263,34 @@
       // Fetches and displays existing milestones
       async function loadMilestones(agreementId) {
         const c = getContract();
-        const agreement = await getAgreement(agreementId);
+
+        let agreement;
+        try {
+          agreement = await getAgreement(agreementId);
+        } catch (err) {
+          // The contract reverts for a non-existent ID — show a clear
+          // empty/missing message instead of failing silently.
+          console.warn("Agreement lookup failed", err);
+          milestonesTitle.textContent = `Agreement #${agreementId}`;
+          milestonesContainer.innerHTML =
+            '<p class="empty-state">Sorry — Agreement #' +
+            agreementId +
+            " does not exist.</p>";
+          setupCard.style.display = "none";
+          completionCard.style.display = "none";
+          refundCard.style.display = "none";
+          setRefundStatus("", "");
+          setCompletionStatus("", "");
+          currentAgreementId = null;
+          return;
+        }
+
         milestonesTitle.textContent = `Agreement #${agreement.id} Milestones`;
         currentAgreementId = agreementId;
 
-        // Both roles share this page, but each action is restricted
-        // on-chain to one specific address (or, for rewards, either
-        // participant) — work out which apply to the connected wallet once
-        // so every button below can be disabled *before* a doomed
-        // MetaMask prompt, rather than reacting to NotShipper/NotCarrier/
-        // NotParticipant after the fact.
+// Which side of this agreement is the connected wallet? Action buttons
+        // are shown per-role: the Shipper releases & rewards milestones; the
+        // Carrier submits work and claims the completion bonus.
         const currentAcc = getCurrentAccount();
         const isShipper =
           !!currentAcc &&
@@ -283,6 +298,8 @@
         const isCarrier =
           !!currentAcc &&
           currentAcc.toLowerCase() === agreement.carrier.toLowerCase();
+// Convenience flag so the completion/other logic knows whether the
+        // connected wallet is involved in this agreement at all.
         const isParticipant = isShipper || isCarrier;
 
         // Refund is available on ANY agreement once its deadline has
@@ -317,31 +334,31 @@
 
         setupCard.style.display = "none";
 
-        // Look up which paid milestones already have their reward claimed,
-        // so a stale "Reward This Milestone" control isn't left clickable
-        // after it's already been rewarded (it would just revert with
-        // MilestoneAlreadyRewarded).
-        const rewardedFlags = await Promise.all(
-          milestones.map((m, index) =>
-            m.isPaid ? c.milestoneRewarded(agreementId, index) : Promise.resolve(false),
-          ),
-        );
+// Ask the contract which milestones the Shipper has already rewarded.
+        // A milestone counts as "rewarded" (Pickup/Intermediate/Delivery LRT
+        // given to the Carrier) only after rewardMilestone() succeeds on-chain.
+        // The Carrier may claim the completion bonus only once EVERY milestone
+        // has been rewarded.
+        let rewarded = [];
+        try {
+          for (let i = 0; i < milestones.length; i++) {
+            rewarded.push(Boolean(await c.milestoneRewarded(agreementId, i)));
+          }
+        } catch (err) {
+          console.warn("Could not read milestone reward status", err);
+          rewarded = milestones.map(() => false);
+        }
+        const allRewarded = rewarded.length > 0 && rewarded.every(Boolean);
 
         // Render existing milestones
         const rows = milestones
           .map((m, index) => {
             const amountEth = ethers.formatEther(m.amount);
-            const rewardBlock = m.isPaid
-              ? rewardControlsHtml(agreementId, index, isParticipant, rewardedFlags[index])
-              : "";
-            const submitDisabled = m.isSubmitted || !isCarrier;
-            const submitTitle = !isCarrier
-              ? "Only this agreement's Carrier can submit work"
-              : "";
-            const releaseDisabled = !m.isSubmitted || m.isPaid || !isShipper;
-            const releaseTitle = !isShipper
-              ? "Only this agreement's Shipper can release payment"
-              : "";
+const isRewarded = rewarded[index];
+            const rewardBlock =
+              isShipper && m.isPaid && !isRewarded
+                ? rewardControlsHtml(agreementId, index)
+                : "";
             return `
           <div class="timeline-item" style="flex-direction: column; align-items: flex-start; gap: 8px;">
             <div style="display: flex; justify-content: space-between; width: 100%;">
@@ -350,14 +367,22 @@
             </div>
             <p>Submitted: ${m.isSubmitted ? "✅ Yes" : "❌ No"} | Paid: ${
               m.isPaid ? "✅ Paid" : "⏳ Pending"
-            }</p>
+            } | Rewarded: ${isRewarded ? "✅ Yes" : "❌ No"}</p>
             <div style="display: flex; gap: 10px; margin-top: 6px;">
-              <button onclick="submitMilestone(${agreementId}, ${index})" ${
-              submitDisabled ? "disabled" : ""
-            } title="${submitTitle}">Carrier: Submit Work</button>
-              <button onclick="releasePayment(${agreementId}, ${index})" ${
-              releaseDisabled ? "disabled" : ""
-            } title="${releaseTitle}">Shipper: Release Payment</button>
+${
+                isShipper
+                  ? `<button onclick="releasePayment(${agreementId}, ${index})" ${
+                      !m.isSubmitted || m.isPaid ? "disabled" : ""
+                    }>Release Payment</button>`
+                  : ""
+              }
+              ${
+                isCarrier
+                  ? `<button onclick="submitMilestone(${agreementId}, ${index})" ${
+                      m.isSubmitted ? "disabled" : ""
+                    }>Submit Work</button>`
+                  : ""
+              }
             </div>
             ${rewardBlock}
           </div>
@@ -367,28 +392,21 @@
 
         milestonesContainer.innerHTML = rows;
 
-        // Show the completion bonus card once the agreement itself is
-        // Completed (all milestones paid) — matches the contract's own
-        // AgreementStatus.Completed transition. The claim button itself is
-        // further gated to this agreement's own shipper/carrier, same
-        // reasoning as the reward controls above, and hidden once claimed
-        // so it can't be clicked into a CompletionAlreadyRewarded revert.
-        const alreadyClaimed =
-          agreement.statusLabel === "Completed"
-            ? await c.completionRewarded(agreementId)
-            : false;
-        completionCard.style.display =
-          agreement.statusLabel === "Completed" ? "block" : "none";
-        claimCompletionBtn.style.display = alreadyClaimed ? "none" : "inline-block";
-        claimCompletionBtn.disabled = !isParticipant;
-        setCompletionStatus(
-          alreadyClaimed
-            ? "✅ Completion bonus already claimed for this agreement."
-            : isParticipant
+// Completion bonus — shown to the Carrier ONLY, and only once the
+        // agreement is Completed AND the Shipper has rewarded every milestone.
+        setCompletionStatus("", "");
+        if (isCarrier && agreement.statusLabel === "Completed") {
+          completionCard.style.display = "block";
+          claimCompletionBtn.disabled = !allRewarded;
+          setCompletionStatus(
+            allRewarded
               ? ""
-              : "Connect as this agreement's Shipper or Carrier to claim the bonus.",
-          alreadyClaimed ? "success" : isParticipant ? "" : "hint",
-        );
+              : "All milestones are settled, but the Shipper must reward every milestone before you can claim the completion bonus.",
+            "",
+          );
+        } else {
+          completionCard.style.display = "none";
+        }
       }
 
       // Configure Milestones call
@@ -464,7 +482,14 @@
           const c = getContract();
           const tx = await c.rewardMilestone(agreementId, index, rewardKind);
           await tx.wait();
-          msgEl.textContent = "Rewarded!";
+const rewardOption =
+            REWARD_KIND_OPTIONS.find((o) => o.value === rewardKind) &&
+            REWARD_KIND_OPTIONS[rewardKind];
+          const tokens = rewardOption ? rewardOption.amount : 0;
+          msgEl.textContent =
+            "Rewarded! +" + tokens + " LRT given to the Carrier.";
+          // Refresh so the "Rewarded" badge updates and the completion bonus
+          // unlocks once ALL milestones have been rewarded.
           loadMilestones(agreementId);
         } catch (err) {
           console.error(err);
@@ -544,8 +569,23 @@
       });
 
       loadMilestonesBtn.addEventListener("click", async () => {
-        const id = Number(agreementIdInput.value);
-        if (!id || id < 1) return alert("Please enter a valid Agreement ID.");
+        const raw = agreementIdInput.value.trim();
+        const id = Number(raw);
+
+        // Validate the input format first and show an inline error message.
+        if (raw === "" || !Number.isInteger(id) || id < 1) {
+          milestonesTitle.textContent = "Agreement # —";
+          milestonesContainer.innerHTML =
+            '<p class="empty-state">Please enter a valid Agreement ID (a positive whole number, e.g. 1).</p>';
+          setupCard.style.display = "none";
+          completionCard.style.display = "none";
+          refundCard.style.display = "none";
+          setRefundStatus("", "");
+          setCompletionStatus("", "");
+          milestonesCard.style.display = "block";
+          return;
+        }
+
         milestonesCard.style.display = "block";
         await loadMilestones(id);
       });
