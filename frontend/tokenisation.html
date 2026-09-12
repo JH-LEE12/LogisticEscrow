@@ -80,9 +80,11 @@
         </div>
       </section>
 
-      <!-- Look up any carrier's reputation — available to everyone once
-           connected, but this is the main reason a Shipper has for being on
-           this tab at all. -->
+      <!-- Look up any carrier's reputation. Shown to Shippers and to
+           unregistered visitors, hidden from Carriers — a Carrier's own record
+           is already in the cards above, and vetting a carrier before
+           assigning them an agreement is a Shipper's task. This is the main
+           reason a Shipper has for being on this tab at all. -->
       <section class="card" id="lookupCard" style="display: none">
         <h2>Look Up a Carrier's Reputation</h2>
         <p class="hint">
@@ -228,7 +230,12 @@
                 : "Register as a Shipper or Carrier from the Dashboard to get started. Carriers earn reputation points as they complete work; anyone can look up a carrier's reputation below.";
           }
 
-          lookupCard.style.display = "block";
+          // Hidden for a Carrier: vetting a carrier is a Shipper's task, and a
+          // Carrier already sees their own record in the cards above. Shippers
+          // and unregistered visitors keep it. This is a UI convenience only —
+          // balanceOf and reputationLevel stay public view functions that
+          // anyone can call directly.
+          lookupCard.style.display = role === ROLE.CARRIER ? "none" : "block";
         } catch (err) {
           console.error("Could not load reputation data:", err);
           summaryCard.style.display = "none";
