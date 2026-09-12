@@ -1,0 +1,115 @@
+Run: node demo_eip712.js
+
+◇ injected env (2) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+======================================================================
+STEP 1 — Signing off-chain (no gas, no transaction)
+======================================================================
+Signer address: 0x6B1614DE8Af550bd60943d02028628Fe3581067f
+Signature generated: 0xe6acb95c3e96cfed7326e48825afc009160019a1e844fe8cb5b45019377ffe2665b058a1e38064afe5b9e074feb70dbbb68a1d3f2fdc566def51c15e8cdd7f4c1c
+
+======================================================================
+STEP 2 — Submitting on-chain FROM A DIFFERENT ACCOUNT
+======================================================================
+Submitter address (pays gas): 0xd25E4ABe3E170Ff69704a80ee1623F88513E769C
+Sending transaction...
+Transaction sent: 0xbb8aa5662d3ec662bcb4c70911d86bea02562f6a388ee2c8b8febdcfbbcc50fa
+Waiting for confirmation...
+
+======================================================================
+DONE — Status: SUCCESS
+======================================================================
+
+Signer 0x6B1614DE8Af550bd60943d02028628Fe3581067f is now registered — and never
+sent a transaction or paid any gas themselves.
+
+View on Etherscan:
+https://sepolia.etherscan.io/tx/0xbb8aa5662d3ec662bcb4c70911d86bea02562f6a388ee2c8b8febdcfbbcc50fa
+
+
+
+
+
+
+Run: node demo_merkle.js
+
+◇ injected env (2) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+======================================================================
+STEP 1 — Building the Merkle tree off-chain
+======================================================================
+Approved list size: 2 addresses
+Demo address: 0x2c8d7E0ef6A5D0dFE1c112A0A47f2F8431aA5A9e
+Computed root: 0xbd2db12e399ab4d0fb44152f950f0058b97e8b3a7b14b8809232844bec42b7ab
+
+======================================================================
+STEP 2 — Owner publishes the root (one-time setup)
+======================================================================
+Owner address: 0xd25E4ABe3E170Ff69704a80ee1623F88513E769C
+Transaction sent: 0xea1eeea258f9cc8188c4996816eae6482ea564d8e3aca5d9eccc4294c8ef379e
+Waiting for confirmation...
+Status: SUCCESS
+
+======================================================================
+STEP 3 — Demo account proves membership and registers
+======================================================================
+Transaction sent: 0xef95e80907b3c9fba7869501ce93182017b2343f995f659d2ee17b96d5415e44
+Waiting for confirmation...
+
+======================================================================
+DONE — Status: SUCCESS
+======================================================================
+
+0x2c8d7E0ef6A5D0dFE1c112A0A47f2F8431aA5A9e is now registered as Carrier — using
+only a Merkle proof, never the ordinary registerUser().
+
+View on Etherscan:
+Root:         https://sepolia.etherscan.io/tx/0xea1eeea258f9cc8188c4996816eae6482ea564d8e3aca5d9eccc4294c8ef379e
+
+Registration: https://sepolia.etherscan.io/tx/0xef95e80907b3c9fba7869501ce93182017b2343f995f659d2ee17b96d5415e44
+
+
+
+
+
+
+
+
+Run: node demo_pause.js
+
+◇ injected env (2) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+Owner address: 0xd25E4ABe3E170Ff69704a80ee1623F88513E769C
+Demo account: 0xbB2bE074a6213C53a6d2DbDD59C53d8b57575991
+
+======================================================================
+STEP 1 — Owner pauses the contract
+======================================================================
+Transaction sent: 0x78918c120aec9ebb89216adc379b640295481306e329508874941f7aba3dcdd2
+Contract paused() now reads: true
+
+======================================================================
+STEP 2 — Attempt to register WHILE PAUSED (should be blocked)
+======================================================================
+BLOCKED AS EXPECTED.
+Revert reason: execution reverted (unknown custom error)
+This proves the emergency stop genuinely halts registration.
+
+======================================================================
+STEP 3 — Owner unpauses the contract
+======================================================================
+Transaction sent: 0x44c2429ccf2ef3a5011374464039260b4208edcf7a0709a08b446a70f2f4c3b5
+Contract paused() now reads: false
+
+======================================================================
+STEP 4 — Same account registers AGAIN, now that it's unpaused
+======================================================================
+Transaction sent: 0x8e9213e693d570e602d83b6b0778591ac1f70ef0ee3b8eb44575e852f8b5dc50
+Status: SUCCESS
+
+======================================================================
+DONE — pause() genuinely blocks sensitive actions, and
+unpause() genuinely restores normal operation.
+======================================================================
+
+View on Etherscan:
+Pause:            https://sepolia.etherscan.io/tx/0x78918c120aec9ebb89216adc379b640295481306e329508874941f7aba3dcdd2
+Unpause:          https://sepolia.etherscan.io/tx/0x44c2429ccf2ef3a5011374464039260b4208edcf7a0709a08b446a70f2f4c3b5
+Successful register (after unpause): https://sepolia.etherscan.io/tx/0x8e9213e693d570e602d83b6b0778591ac1f70ef0ee3b8eb44575e852f8b5dc50
