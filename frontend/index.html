@@ -43,6 +43,7 @@
             Register as Carrier
           </button>
         </div>
+        <p id="registerStatusMessage" role="status" aria-live="polite"></p>
       </section>
 
       <!-- Status card: shown once connected, regardless of registration -->
@@ -97,6 +98,40 @@
       }
       // describeError() lives in app.js — shared by every page, since it
       // needs to decode raw revert data via the contract's own interface.
+      // Registration reports its outcome inline rather than through alert():
+      // a modal blocks the page, vanishes as soon as it is dismissed, and is
+      // not announced to a screen reader. Registering is a transaction, so the
+      // buttons also have to show that something is happening while it mines.
+      function setRegisterStatus(text, kind) {
+        const el = document.getElementById("registerStatusMessage");
+        el.textContent = text;
+        el.className = kind || "";
+      }
+
+      async function register(roleCode) {
+        const buttons = registerCard.querySelectorAll("button");
+        buttons.forEach((b) => (b.disabled = true));
+        setRegisterStatus("Confirm the transaction in MetaMask...", "");
+
+        try {
+          await registerUser(roleCode);
+        } catch (err) {
+          console.error(err);
+          setRegisterStatus(
+            "Registration failed: " + describeError(err),
+            "error",
+          );
+          buttons.forEach((b) => (b.disabled = false));
+          return;
+        }
+
+        // Registered. Redrawing the dashboard is a separate step: if reading
+        // the chain back fails, that is a display problem, and reporting it as
+        // a failed registration would be wrong — the role is already set.
+        setRegisterStatus("Registered as " + ROLE_LABEL[roleCode] + ".", "success");
+        await refreshDashboard();
+      }
+
       function renderRoleBadge(roleCode) {
         roleBadge.textContent = ROLE_LABEL[roleCode];
         roleBadge.className = "role-badge";
@@ -260,27 +295,11 @@
 
       document
         .getElementById("registerShipperBtn")
-        .addEventListener("click", async () => {
-          try {
-            await registerUser(ROLE.SHIPPER);
-            await refreshDashboard();
-          } catch (err) {
-            console.error(err);
-            alert("Registration failed: " + describeError(err));
-          }
-        });
+        .addEventListener("click", () => register(ROLE.SHIPPER));
 
       document
         .getElementById("registerCarrierBtn")
-        .addEventListener("click", async () => {
-          try {
-            await registerUser(ROLE.CARRIER);
-            await refreshDashboard();
-          } catch (err) {
-            console.error(err);
-            alert("Registration failed: " + describeError(err));
-          }
-        });
+        .addEventListener("click", () => register(ROLE.CARRIER));
 
       // Auto-reconnect on page load if MetaMask already trusts this site.
       window.addEventListener("DOMContentLoaded", async () => {

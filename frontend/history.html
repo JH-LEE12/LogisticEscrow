@@ -50,6 +50,7 @@
           />
           <button id="loadHistoryBtn">Load history</button>
         </div>
+        <p id="historyStatusMessage" role="status" aria-live="polite"></p>
       </section>
 
       <section class="card" id="timelineCard" style="display: none">
@@ -88,6 +89,14 @@
 
       function shortenAddress(addr) {
         return addr.slice(0, 6) + "..." + addr.slice(-4);
+      }
+
+      // Reported inline rather than through alert(), which blocks the page and
+      // leaves nothing behind once dismissed.
+      function setHistoryStatus(text, kind) {
+        const el = document.getElementById("historyStatusMessage");
+        el.textContent = text;
+        el.className = kind || "";
       }
 
       function onConnected() {
@@ -283,9 +292,11 @@
       loadHistoryBtn.addEventListener("click", async () => {
         const id = Number(agreementIdInput.value);
         if (!id || id < 1) {
-          alert("Enter a valid agreement ID.");
+          setHistoryStatus("Enter an agreement ID of 1 or higher.", "error");
+          agreementIdInput.focus();
           return;
         }
+        setHistoryStatus("", "");
         timelineCard.style.display = "block";
         try {
           await loadHistory(id);

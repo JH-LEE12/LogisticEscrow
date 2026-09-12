@@ -55,7 +55,7 @@
           />
           <button id="loadMilestonesBtn">Load Milestones</button>
         </div>
-        <div id="myAgreementsBox" style="margin-top: 10px">
+        <div id="myAgreementsBox">
           <p class="hint">Your Agreements: <span id="myAgreementsList">Scanning…</span></p>
         </div>
       </section>
@@ -68,9 +68,10 @@
           Total ETH must match the payload value.
         </p>
         <div id="setupFormContainer"></div>
-        <button id="submitSetupBtn" style="margin-top: 12px">
+        <button id="submitSetupBtn">
           Confirm & Save Milestones
         </button>
+        <p id="setupStatusMessage" role="status" aria-live="polite"></p>
       </section>
 
       <!-- Milestones Active List -->
@@ -79,6 +80,7 @@
         <div id="milestonesContainer">
           <p class="empty-state">No milestones loaded.</p>
         </div>
+        <p id="milestoneActionStatus" role="status" aria-live="polite"></p>
       </section>
 
       <!-- Completion Bonus -->
@@ -160,6 +162,22 @@
         refundStatusMessage.className = kind || "";
       }
 
+      // Same shape as the two helpers above. These replace the alert() calls
+      // that used to report the outcome of setup, submit and release: a modal
+      // dialog blocks the page, loses the message the moment it is dismissed,
+      // and is not announced to a screen reader.
+      function setSetupStatus(text, kind) {
+        const el = document.getElementById("setupStatusMessage");
+        el.textContent = text;
+        el.className = kind || "";
+      }
+
+      function setMilestoneActionStatus(text, kind) {
+        const el = document.getElementById("milestoneActionStatus");
+        el.textContent = text;
+        el.className = kind || "";
+      }
+
       function onConnected() {
         walletAddressEl.textContent = shortenAddress(getCurrentAccount());
         walletAddressEl.style.display = "inline-block";
@@ -187,7 +205,7 @@
           listEl.innerHTML = mine
             .map(
               (a) =>
-                `<a href="#" onclick="selectAgreement(${a.id}); return false;" style="margin-right:8px;">#${a.id}</a>`,
+                `<a href="#" onclick="selectAgreement(${a.id}); return false;">#${a.id}</a>`,
             )
             .join("");
         } catch (err) {
@@ -224,11 +242,11 @@
           const amountWei = share + (i === agreement.milestoneCount - 1 ? remainder : 0n);
           const defaultAmount = ethers.formatEther(amountWei);
           setupFormContainer.innerHTML += `
-          <div style="margin-bottom: 12px; display: flex; gap: 8px;">
+          <div class="milestone-setup-row">
             <input type="text" class="m-desc" placeholder="Milestone #${
               i + 1
-            } Description" style="flex: 2; padding: 8px;" />
-            <input type="number" step="any" class="m-amount" value="${defaultAmount}" style="flex: 1; padding: 8px;" />
+            } Description" />
+            <input type="number" step="any" class="m-amount" value="${defaultAmount}" />
           </div>
         `;
         }
@@ -251,7 +269,7 @@
         ).join("");
 
         return `
-          <div class="reward-row" style="display:flex; gap:8px; align-items:center; margin-top:6px;">
+          <div class="reward-row">
             <select id="rewardKind-${agreementId}-${index}">${options}</select>
             <button onclick="rewardMilestone(${agreementId}, ${index})">
               Reward This Milestone (Tokens)
@@ -360,15 +378,15 @@ const isRewarded = rewarded[index];
                 ? rewardControlsHtml(agreementId, index)
                 : "";
             return `
-          <div class="timeline-item" style="flex-direction: column; align-items: flex-start; gap: 8px;">
-            <div style="display: flex; justify-content: space-between; width: 100%;">
+          <div class="milestone-item">
+            <div class="milestone-head">
               <h3>Milestone #${index + 1}: ${m.description}</h3>
               <strong>${amountEth} ETH</strong>
             </div>
             <p>Submitted: ${m.isSubmitted ? "✅ Yes" : "❌ No"} | Paid: ${
               m.isPaid ? "✅ Paid" : "⏳ Pending"
             } | Rewarded: ${isRewarded ? "✅ Yes" : "❌ No"}</p>
-            <div style="display: flex; gap: 10px; margin-top: 6px;">
+            <div class="milestone-actions">
 ${
                 isShipper
                   ? `<button onclick="releasePayment(${agreementId}, ${index})" ${
@@ -426,13 +444,17 @@ ${
 
           try {
             const c = getContract();
+            setSetupStatus("Saving milestones — confirm in MetaMask...", "");
             const tx = await c.setupMilestones(id, descriptions, amountsWei);
             await tx.wait();
-            alert("Milestones configured successfully!");
+            setSetupStatus("Milestones saved. They are listed below.", "success");
             loadMilestones(id);
           } catch (err) {
             console.error(err);
-            alert("Error configuring milestones: " + describeError(err));
+            setSetupStatus(
+              "Could not save milestones: " + describeError(err),
+              "error",
+            );
           }
         });
 
@@ -440,13 +462,25 @@ ${
       async function submitMilestone(agreementId, index) {
         try {
           const c = getContract();
+          setMilestoneActionStatus(
+            "Submitting milestone " + (index + 1) + " — confirm in MetaMask...",
+            "",
+          );
           const tx = await c.submitMilestone(agreementId, index);
           await tx.wait();
-          alert("Milestone work submitted!");
+          setMilestoneActionStatus(
+            "Milestone " +
+              (index + 1) +
+              " submitted. The Shipper can now release its payment.",
+            "success",
+          );
           loadMilestones(agreementId);
         } catch (err) {
           console.error(err);
-          alert("Error submitting milestone: " + describeError(err));
+          setMilestoneActionStatus(
+            "Could not submit milestone: " + describeError(err),
+            "error",
+          );
         }
       }
 
@@ -454,13 +488,25 @@ ${
       async function releasePayment(agreementId, index) {
         try {
           const c = getContract();
+          setMilestoneActionStatus(
+            "Releasing payment for milestone " +
+              (index + 1) +
+              " — confirm in MetaMask...",
+            "",
+          );
           const tx = await c.verifyAndReleaseMilestone(agreementId, index);
           await tx.wait();
-          alert("Payment released successfully!");
+          setMilestoneActionStatus(
+            "Payment for milestone " + (index + 1) + " released to the Carrier.",
+            "success",
+          );
           loadMilestones(agreementId);
         } catch (err) {
           console.error(err);
-          alert("Error releasing payment: " + describeError(err));
+          setMilestoneActionStatus(
+            "Could not release payment: " + describeError(err),
+            "error",
+          );
         }
       }
 
