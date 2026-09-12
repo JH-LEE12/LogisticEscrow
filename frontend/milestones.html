@@ -43,6 +43,8 @@
         <h2>Milestone Management</h2>
         <p class="hint">
           Enter an agreement ID to fetch, configure, or action milestones.
+          Actions below only succeed for the agreement's own shipper/carrier
+          — check "Your Agreements" if you're not sure which ID is yours.
         </p>
         <div class="lookup-row">
           <input
@@ -52,6 +54,9 @@
             placeholder="Agreement ID, e.g. 1"
           />
           <button id="loadMilestonesBtn">Load Milestones</button>
+        </div>
+        <div id="myAgreementsBox" style="margin-top: 10px">
+          <p class="hint">Your Agreements: <span id="myAgreementsList">Scanning…</span></p>
         </div>
       </section>
 
@@ -141,51 +146,10 @@
         return addr.slice(0, 6) + "..." + addr.slice(-4);
       }
 
-      function describeError(error) {
-        if (error && error.code === "ACTION_REJECTED") {
-          return "Transaction cancelled in MetaMask.";
-        }
-
-        const REVERT_MESSAGES = {
-          NotShipper: "Only the Shipper of this agreement can do that.",
-          NotCarrier: "Only the Carrier of this agreement can do that.",
-          NotParticipant:
-            "Only the Shipper or Carrier of this agreement can do that.",
-          MilestoneNotSubmitted:
-            "This milestone hasn't been marked as submitted by the Carrier yet.",
-          MilestoneAlreadyPaid: "This milestone has already been paid.",
-          InvalidMilestoneConfig:
-            "The milestone amounts don't add up to the total payload value.",
-          MilestoneAlreadyRewarded:
-            "This milestone's reward has already been claimed.",
-          MilestoneNotVerified:
-            "This milestone must be verified and paid before it can be rewarded.",
-          AgreementNotCompleted:
-            "This agreement must be fully completed before claiming the bonus.",
-          CompletionAlreadyRewarded:
-            "The completion bonus for this agreement has already been claimed.",
-          DeadlineNotPassed:
-            "The deadline hasn't passed yet — refund isn't available.",
-          AlreadyFinalized:
-            "This agreement has already been settled (refunded, completed, or resolved).",
-          ContractIsPaused: "The contract is currently paused by its owner.",
-        };
-
-        const revertName =
-          (error && error.revert && error.revert.name) ||
-          (error && error.errorName);
-
-        if (revertName && REVERT_MESSAGES[revertName]) {
-          return REVERT_MESSAGES[revertName];
-        }
-
-        if (revertName) {
-          return "Transaction rejected by the contract (" + revertName + ").";
-        }
-
-        return "Transaction failed. Check that you're using the correct account for this action, and that MetaMask is on the right network.";
-      }
-
+      // describeError() itself lives in app.js — shared by every page —
+      // since it needs to decode raw revert data via the contract's own
+      // interface (see app.js for why ethers/MetaMask's own auto-decode
+      // isn't reliable enough to depend on here).
       function setCompletionStatus(text, kind) {
         completionStatusMessage.textContent = text;
         completionStatusMessage.className = kind || "";
@@ -203,21 +167,68 @@
         connectBtn.disabled = true;
         connectPrompt.style.display = "none";
         lookupCard.style.display = "block";
+        loadMyAgreements(getCurrentAccount());
       }
 
-      // Renders setup fields if Shipper hasn't configured milestones yet
+      // Finds every agreement where the connected wallet is shipper or
+      // carrier, so you don't have to guess an ID and hit NotParticipant on
+      // the wrong one. Reuses app.js's getMyAgreements() (same helper the
+      // Dashboard's "My Agreements" list is built from).
+      async function loadMyAgreements(account) {
+        const listEl = document.getElementById("myAgreementsList");
+        listEl.textContent = "Scanning…";
+        try {
+          const mine = await getMyAgreements(account);
+          if (mine.length === 0) {
+            listEl.textContent = "None found for this wallet.";
+            return;
+          }
+
+          listEl.innerHTML = mine
+            .map(
+              (a) =>
+                `<a href="#" onclick="selectAgreement(${a.id}); return false;" style="margin-right:8px;">#${a.id}</a>`,
+            )
+            .join("");
+        } catch (err) {
+          console.error("Could not scan for your agreements", err);
+          listEl.textContent = "Could not scan (see console).";
+        }
+      }
+
+      // Fills the ID field and loads it — used by the "Your Agreements" links.
+      function selectAgreement(id) {
+        agreementIdInput.value = id;
+        milestonesCard.style.display = "block";
+        loadMilestones(id);
+      }
+
+      // Renders setup fields if Shipper hasn't configured milestones yet.
+      // Amounts must sum to exactly agreement.payloadValueEth on-chain
+      // (MilestonePayout.setupMilestones reverts with InvalidMilestoneConfig
+      // otherwise) — pre-filling an even split gets that right by default
+      // while still letting the Shipper edit any field for a custom,
+      // uneven breakdown (e.g. more on delivery than on pickup).
       async function renderSetupForm(agreement) {
         const setupFormContainer =
           document.getElementById("setupFormContainer");
-        setupFormContainer.innerHTML = "";
+
+        const payloadWei = ethers.parseEther(agreement.payloadValueEth);
+        const count = BigInt(agreement.milestoneCount);
+        const share = payloadWei / count;
+        const remainder = payloadWei % count; // dumped into the last milestone so the split still sums exactly
+
+        setupFormContainer.innerHTML = `<p class="hint">Amounts are pre-filled as an even split of the ${agreement.payloadValueEth} ETH payload — edit them for a custom breakdown, as long as they still add up to ${agreement.payloadValueEth} ETH total.</p>`;
 
         for (let i = 0; i < agreement.milestoneCount; i++) {
+          const amountWei = share + (i === agreement.milestoneCount - 1 ? remainder : 0n);
+          const defaultAmount = ethers.formatEther(amountWei);
           setupFormContainer.innerHTML += `
           <div style="margin-bottom: 12px; display: flex; gap: 8px;">
             <input type="text" class="m-desc" placeholder="Milestone #${
               i + 1
             } Description" style="flex: 2; padding: 8px;" />
-            <input type="number" step="any" class="m-amount" placeholder="Amount (ETH)" style="flex: 1; padding: 8px;" />
+            <input type="number" step="any" class="m-amount" value="${defaultAmount}" style="flex: 1; padding: 8px;" />
           </div>
         `;
         }
@@ -227,8 +238,17 @@
       // Builds the "Reward this milestone" control row for a paid,
       // not-yet-rewarded milestone. Kept separate from the main row so a
       // failed/duplicate reward attempt doesn't disturb the submit/release
-      // buttons above it.
-      function rewardControlsHtml(agreementId, index) {
+      // buttons above it. Only rendered as interactive for the connected
+      // agreement's own shipper/carrier — anyone else would just hit
+      // NotParticipant, so show them why instead of a live control.
+      function rewardControlsHtml(agreementId, index, isParticipant, isRewarded) {
+        if (isRewarded) {
+          return `<p class="hint" style="margin-top:6px;">✅ Reward already claimed for this milestone.</p>`;
+        }
+        if (!isParticipant) {
+          return `<p class="hint" style="margin-top:6px;">Connect as this agreement's Shipper or Carrier to reward this milestone.</p>`;
+        }
+
         const options = REWARD_KIND_OPTIONS.map(
           (o) => `<option value="${o.value}">${o.label}</option>`,
         ).join("");
@@ -249,6 +269,21 @@
         const agreement = await getAgreement(agreementId);
         milestonesTitle.textContent = `Agreement #${agreement.id} Milestones`;
         currentAgreementId = agreementId;
+
+        // Both roles share this page, but each action is restricted
+        // on-chain to one specific address (or, for rewards, either
+        // participant) — work out which apply to the connected wallet once
+        // so every button below can be disabled *before* a doomed
+        // MetaMask prompt, rather than reacting to NotShipper/NotCarrier/
+        // NotParticipant after the fact.
+        const currentAcc = getCurrentAccount();
+        const isShipper =
+          !!currentAcc &&
+          currentAcc.toLowerCase() === agreement.shipper.toLowerCase();
+        const isCarrier =
+          !!currentAcc &&
+          currentAcc.toLowerCase() === agreement.carrier.toLowerCase();
+        const isParticipant = isShipper || isCarrier;
 
         // Refund is available on ANY agreement once its deadline has
         // passed, regardless of whether milestones exist yet — check this
@@ -272,11 +307,7 @@
           milestonesContainer.innerHTML =
             '<p class="empty-state">No milestones configured for this agreement yet.</p>';
           completionCard.style.display = "none";
-          const currentAcc = getCurrentAccount();
-          if (
-            currentAcc &&
-            currentAcc.toLowerCase() === agreement.shipper.toLowerCase()
-          ) {
+          if (isShipper) {
             renderSetupForm(agreement);
           } else {
             setupCard.style.display = "none";
@@ -286,12 +317,30 @@
 
         setupCard.style.display = "none";
 
+        // Look up which paid milestones already have their reward claimed,
+        // so a stale "Reward This Milestone" control isn't left clickable
+        // after it's already been rewarded (it would just revert with
+        // MilestoneAlreadyRewarded).
+        const rewardedFlags = await Promise.all(
+          milestones.map((m, index) =>
+            m.isPaid ? c.milestoneRewarded(agreementId, index) : Promise.resolve(false),
+          ),
+        );
+
         // Render existing milestones
         const rows = milestones
           .map((m, index) => {
             const amountEth = ethers.formatEther(m.amount);
             const rewardBlock = m.isPaid
-              ? rewardControlsHtml(agreementId, index)
+              ? rewardControlsHtml(agreementId, index, isParticipant, rewardedFlags[index])
+              : "";
+            const submitDisabled = m.isSubmitted || !isCarrier;
+            const submitTitle = !isCarrier
+              ? "Only this agreement's Carrier can submit work"
+              : "";
+            const releaseDisabled = !m.isSubmitted || m.isPaid || !isShipper;
+            const releaseTitle = !isShipper
+              ? "Only this agreement's Shipper can release payment"
               : "";
             return `
           <div class="timeline-item" style="flex-direction: column; align-items: flex-start; gap: 8px;">
@@ -304,11 +353,11 @@
             }</p>
             <div style="display: flex; gap: 10px; margin-top: 6px;">
               <button onclick="submitMilestone(${agreementId}, ${index})" ${
-              m.isSubmitted ? "disabled" : ""
-            }>Carrier: Submit Work</button>
+              submitDisabled ? "disabled" : ""
+            } title="${submitTitle}">Carrier: Submit Work</button>
               <button onclick="releasePayment(${agreementId}, ${index})" ${
-              !m.isSubmitted || m.isPaid ? "disabled" : ""
-            }>Shipper: Release Payment</button>
+              releaseDisabled ? "disabled" : ""
+            } title="${releaseTitle}">Shipper: Release Payment</button>
             </div>
             ${rewardBlock}
           </div>
@@ -320,10 +369,26 @@
 
         // Show the completion bonus card once the agreement itself is
         // Completed (all milestones paid) — matches the contract's own
-        // AgreementStatus.Completed transition.
-        setCompletionStatus("", "");
+        // AgreementStatus.Completed transition. The claim button itself is
+        // further gated to this agreement's own shipper/carrier, same
+        // reasoning as the reward controls above, and hidden once claimed
+        // so it can't be clicked into a CompletionAlreadyRewarded revert.
+        const alreadyClaimed =
+          agreement.statusLabel === "Completed"
+            ? await c.completionRewarded(agreementId)
+            : false;
         completionCard.style.display =
           agreement.statusLabel === "Completed" ? "block" : "none";
+        claimCompletionBtn.style.display = alreadyClaimed ? "none" : "inline-block";
+        claimCompletionBtn.disabled = !isParticipant;
+        setCompletionStatus(
+          alreadyClaimed
+            ? "✅ Completion bonus already claimed for this agreement."
+            : isParticipant
+              ? ""
+              : "Connect as this agreement's Shipper or Carrier to claim the bonus.",
+          alreadyClaimed ? "success" : isParticipant ? "" : "hint",
+        );
       }
 
       // Configure Milestones call
@@ -400,6 +465,7 @@
           const tx = await c.rewardMilestone(agreementId, index, rewardKind);
           await tx.wait();
           msgEl.textContent = "Rewarded!";
+          loadMilestones(agreementId);
         } catch (err) {
           console.error(err);
           msgEl.textContent = "Error: " + describeError(err);
@@ -430,6 +496,7 @@
             "Completion bonus claimed successfully. Check the Reputation tab for your updated balance.",
             "success",
           );
+          loadMilestones(currentAgreementId);
         } catch (err) {
           console.error(err);
           setCompletionStatus("Error: " + describeError(err), "error");

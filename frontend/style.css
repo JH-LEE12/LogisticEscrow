@@ -231,7 +231,8 @@ table.agreements th {
   margin-top: 12px;
 }
 
-.lookup-row input[type="number"] {
+.lookup-row input[type="number"],
+.lookup-row input[type="text"] {
   flex: 1;
   padding: 10px 14px;
   border: 1px solid var(--color-steel);

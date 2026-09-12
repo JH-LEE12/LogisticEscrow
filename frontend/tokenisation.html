@@ -45,7 +45,20 @@
         <p id="warningText" class="hint"></p>
       </section>
 
-      <!-- Reputation summary -->
+      <!-- Shown instead of the summary/rewards cards for a Shipper (or an
+           unregistered wallet) — LRT is only ever minted to a Carrier
+           (TokenisationModule.sol always rewards agreements[id].carrier,
+           regardless of who submits the transaction), so showing "0 / New
+           Carrier" for a Shipper's own address is accurate but misleading.
+           Point them at the lookup box below instead, which is what they
+           actually need this tab for: vetting a carrier before assigning
+           them an agreement. -->
+      <section class="card" id="roleNoticeCard" style="display: none">
+        <h2>My Reputation</h2>
+        <p class="hint" id="roleNoticeText"></p>
+      </section>
+
+      <!-- Reputation summary (own wallet — only meaningful for a Carrier) -->
       <section class="card" id="summaryCard" style="display: none">
         <h2>My Reputation</h2>
         <p class="hint">Wallet: <span id="summaryWallet"></span></p>
@@ -59,11 +72,45 @@
         </p>
       </section>
 
-      <!-- Recent rewards -->
+      <!-- Recent rewards (own wallet) -->
       <section class="card" id="rewardsCard" style="display: none">
         <h2>Recent rewards</h2>
         <div id="rewardsContainer">
           <p class="empty-state">No rewards yet.</p>
+        </div>
+      </section>
+
+      <!-- Look up any carrier's reputation — available to everyone once
+           connected, but this is the main reason a Shipper has for being on
+           this tab at all. -->
+      <section class="card" id="lookupCard" style="display: none">
+        <h2>Look Up a Carrier's Reputation</h2>
+        <p class="hint">
+          Check any carrier address's LRT balance, level, and reward history
+          — handy for vetting a carrier before assigning them an agreement.
+        </p>
+        <div class="lookup-row">
+          <input
+            type="text"
+            id="lookupAddressInput"
+            placeholder="Carrier address, e.g. 0x..."
+          />
+          <button id="lookupBtn">Look Up</button>
+        </div>
+        <p id="lookupStatus" class="hint" role="status" aria-live="polite"></p>
+        <div id="lookupResult" style="display: none; margin-top: 12px">
+          <p class="hint">Wallet: <span id="lookupWallet"></span></p>
+          <p>
+            LRT balance:
+            <strong id="lookupBalance">0</strong>
+          </p>
+          <p>
+            Level:
+            <span id="lookupLevel" class="role-badge">New Carrier</span>
+          </p>
+          <div id="lookupRewardsContainer">
+            <p class="empty-state">No rewards yet.</p>
+          </div>
         </div>
       </section>
     </main>
@@ -76,12 +123,19 @@
       const connectPrompt = document.getElementById("connectPrompt");
       const warningCard = document.getElementById("warningCard");
       const warningText = document.getElementById("warningText");
+      const roleNoticeCard = document.getElementById("roleNoticeCard");
+      const roleNoticeText = document.getElementById("roleNoticeText");
       const summaryCard = document.getElementById("summaryCard");
       const summaryWallet = document.getElementById("summaryWallet");
       const lrtBalance = document.getElementById("lrtBalance");
       const lrtLevel = document.getElementById("lrtLevel");
       const rewardsCard = document.getElementById("rewardsCard");
       const rewardsContainer = document.getElementById("rewardsContainer");
+      const lookupCard = document.getElementById("lookupCard");
+      const lookupAddressInput = document.getElementById("lookupAddressInput");
+      const lookupBtn = document.getElementById("lookupBtn");
+      const lookupStatus = document.getElementById("lookupStatus");
+      const lookupResult = document.getElementById("lookupResult");
 
       function shortenAddress(addr) {
         return addr.slice(0, 6) + "..." + addr.slice(-4);
@@ -94,9 +148,11 @@
         return "";
       }
 
-      function renderRewards(rows) {
+      // Renders a reward-history table into any container — shared by the
+      // "My Reputation" card and the carrier lookup box below.
+      function renderRewardsInto(container, rows) {
         if (rows.length === 0) {
-          rewardsContainer.innerHTML =
+          container.innerHTML =
             '<p class="empty-state">No rewards yet. Rewards appear here once a verified milestone or completed agreement issues LRT.</p>';
           return;
         }
@@ -113,7 +169,7 @@
           )
           .join("");
 
-        rewardsContainer.innerHTML = `
+        container.innerHTML = `
         <table class="agreements">
           <thead>
             <tr><th>Agreement</th><th>Reward</th><th>Amount</th></tr>
@@ -137,23 +193,48 @@
         summaryWallet.textContent = shortenAddress(account);
 
         try {
-          const [balance, level, history] = await Promise.all([
-            getCarrierReputation(account),
-            getCarrierReputationLevel(account),
-            getCarrierRewardHistory(account),
-          ]);
+          const role = await getUserRole(account);
 
-          lrtBalance.textContent = balance;
-          lrtLevel.textContent = level;
-          lrtLevel.className = "role-badge " + levelClass(level);
+          if (role === ROLE.CARRIER) {
+            // Own reputation is only ever meaningful for a Carrier — LRT is
+            // always minted to agreements[id].carrier (see
+            // TokenisationModule.sol's _rewardVerifiedMilestone /
+            // _rewardSuccessfulCompletion), never to a Shipper.
+            roleNoticeCard.style.display = "none";
 
-          summaryCard.style.display = "block";
-          rewardsCard.style.display = "block";
-          renderRewards(history);
+            const [balance, level, history] = await Promise.all([
+              getCarrierReputation(account),
+              getCarrierReputationLevel(account),
+              getCarrierRewardHistory(account),
+            ]);
+
+            lrtBalance.textContent = balance;
+            lrtLevel.textContent = level;
+            lrtLevel.className = "role-badge " + levelClass(level);
+
+            summaryCard.style.display = "block";
+            rewardsCard.style.display = "block";
+            renderRewardsInto(rewardsContainer, history);
+          } else {
+            // Shipper or unregistered — showing "0 LRT / New Carrier" here
+            // would be accurate but misleading (implies they could ever
+            // level up). Explain why, and point at the lookup box instead.
+            summaryCard.style.display = "none";
+            rewardsCard.style.display = "none";
+            roleNoticeCard.style.display = "block";
+            roleNoticeText.textContent =
+              role === ROLE.SHIPPER
+                ? "Reputation points are earned by Carriers based on delivery performance — as a Shipper, you won't accumulate any yourself. Use the lookup below to check a specific carrier's reputation before assigning them an agreement."
+                : "Register as a Shipper or Carrier from the Dashboard to get started. Carriers earn reputation points as they complete work; anyone can look up a carrier's reputation below.";
+          }
+
+          lookupCard.style.display = "block";
         } catch (err) {
           console.error("Could not load reputation data:", err);
           summaryCard.style.display = "none";
           rewardsCard.style.display = "none";
+          roleNoticeCard.style.display = "none";
+          lookupCard.style.display = "none";
           warningCard.style.display = "block";
           warningText.textContent =
             "Could not read reputation data. This usually means the Tokenisation " +
@@ -163,6 +244,44 @@
             "to the same Ganache network truffle migrated to.";
         }
       }
+
+      // Look up any address's reputation — this is what actually gives a
+      // Shipper something useful to do on this tab.
+      lookupBtn.addEventListener("click", async () => {
+        const address = lookupAddressInput.value.trim();
+        lookupResult.style.display = "none";
+
+        if (!ethers.isAddress(address)) {
+          lookupStatus.textContent = "Enter a valid carrier address.";
+          return;
+        }
+
+        try {
+          lookupStatus.textContent = "Looking up...";
+          const [balance, level, history] = await Promise.all([
+            getCarrierReputation(address),
+            getCarrierReputationLevel(address),
+            getCarrierRewardHistory(address),
+          ]);
+
+          document.getElementById("lookupWallet").textContent =
+            shortenAddress(address);
+          document.getElementById("lookupBalance").textContent = balance;
+          const lookupLevelEl = document.getElementById("lookupLevel");
+          lookupLevelEl.textContent = level;
+          lookupLevelEl.className = "role-badge " + levelClass(level);
+          renderRewardsInto(
+            document.getElementById("lookupRewardsContainer"),
+            history,
+          );
+
+          lookupStatus.textContent = "";
+          lookupResult.style.display = "block";
+        } catch (err) {
+          console.error("Could not look up that address:", err);
+          lookupStatus.textContent = "Error: " + describeError(err);
+        }
+      });
 
       connectBtn.addEventListener("click", async () => {
         const account = await connectWallet();

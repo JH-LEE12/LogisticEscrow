@@ -123,6 +123,96 @@ function getCurrentAccount() {
   return currentAccount;
 }
 
+// ---------------------------------------------------------------------
+// Friendly error messages.
+// ethers can normally decode a Solidity custom error into err.reason/
+// err.shortMessage on its own, but that decode silently fails for some
+// estimateGas errors surfaced through MetaMask's injected provider — those
+// show up as a raw "unknown custom error" dump instead. This re-decodes the
+// revert data by hand against the contract's own ABI so every page can show
+// a plain-English reason instead.
+// ---------------------------------------------------------------------
+
+// Only the errors a user is likely to hit through the UI get a custom
+// message; anything else still gets its real Solidity error name (via the
+// fallback below) rather than a generic message.
+const FRIENDLY_ERRORS = {
+  NotParticipant: (args) =>
+    `You're not the shipper or carrier on Agreement #${args[0]} with the connected account — double-check the agreement ID and which wallet you're using.`,
+  NotShipper: () => "Only this agreement's Shipper can do that.",
+  NotCarrier: () => "Only this agreement's Carrier can do that.",
+  AgreementNotFound: (args) => `Agreement #${args[0]} doesn't exist.`,
+  InvalidMilestoneIndex: () => "That milestone doesn't exist on this agreement.",
+  MilestoneNotSubmitted: () => "The Carrier hasn't submitted this milestone yet.",
+  MilestoneAlreadySubmitted: () => "This milestone has already been submitted.",
+  MilestoneAlreadyVerified: () => "This milestone has already been verified.",
+  MilestoneAlreadyPaid: () => "This milestone has already been paid.",
+  MilestoneNotVerified: () => "This milestone hasn't been paid out yet, so there's nothing to reward.",
+  MilestoneAlreadyRewarded: () => "This milestone has already been rewarded.",
+  AgreementNotCompleted: () => "This agreement isn't Completed yet, so no completion bonus is available.",
+  CompletionAlreadyRewarded: () => "The completion bonus for this agreement has already been claimed.",
+  InvalidCarrier: () => "This agreement has no assigned carrier.",
+  InvalidMilestoneConfig: () => "The milestone amounts don't add up to the total payload value.",
+  DeadlineNotPassed: () => "The deadline hasn't passed yet — refund isn't available.",
+  AlreadyFinalized: () => "This agreement has already been settled (refunded, completed, or resolved).",
+  ContractIsPaused: () => "The contract is currently paused by its owner.",
+  InvalidRole: () => "Invalid role selected.",
+  AlreadyRegistered: () => "This wallet has already registered a role — it cannot be changed.",
+  CarrierNotRegistered: () => "That address is not registered as a Carrier. Ask them to register as a Carrier on the Dashboard first.",
+  ZeroAddress: () => "The Carrier address cannot be the zero address.",
+  ZeroValue: () => "Payload value and number of milestones must both be greater than zero.",
+  NotAgreementShipper: () => "Only the Shipper who created this agreement can fund it.",
+  IncorrectFundingAmount: () => "The amount sent does not exactly match the agreement's payload value.",
+  WrongStatus: () => "This agreement is not in the correct state for that action (it may already be funded, completed, or resolved).",
+};
+
+/**
+ * Extracts the raw revert data (a 0x-prefixed hex string) from an error
+ * thrown by an ethers v6 call, wherever the provider happened to nest it.
+ */
+function extractRevertData(err) {
+  const candidates = [
+    err?.data,
+    err?.info?.error?.data,
+    err?.error?.data,
+    err?.error?.error?.data,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.startsWith("0x") && candidate.length >= 10) {
+      return candidate;
+    }
+    if (candidate && typeof candidate.data === "string") {
+      return candidate.data;
+    }
+  }
+  return null;
+}
+
+/**
+ * Turns a thrown error from a contract call into a plain-English message.
+ * Use this in every catch block instead of `err.reason || err.message` so
+ * custom errors MetaMask/ethers fail to auto-decode still read clearly.
+ */
+function describeError(err) {
+  if (err?.code === "ACTION_REJECTED") return "Transaction cancelled in MetaMask.";
+  if (err?.reason) return err.reason;
+
+  const data = extractRevertData(err);
+  if (data) {
+    try {
+      const parsed = getContract().interface.parseError(data);
+      if (parsed) {
+        const friendly = FRIENDLY_ERRORS[parsed.name];
+        return friendly ? friendly(parsed.args) : `${parsed.name}(${parsed.args.join(", ")})`;
+      }
+    } catch (_) {
+      // Not decodable against this ABI — fall through to the generic message.
+    }
+  }
+
+  return err?.shortMessage || err?.message || "Unknown error";
+}
+
 /**
  * Registers the connected wallet as Shipper or Carrier.
  * @param {number} role - use ROLE.SHIPPER or ROLE.CARRIER
