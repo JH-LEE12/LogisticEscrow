@@ -157,6 +157,52 @@
         <p id="statusMessage" role="status" aria-live="polite"></p>
       </section>
 
+      <!-- Fund an agreement created in an earlier visit.
+           lastCreatedAgreementId only lives as long as this page stays loaded,
+           so without this card an agreement left in Created after navigating
+           away could never be funded through the interface. -->
+      <section class="card" id="resumeCard" style="display: none">
+        <h2>Fund an Existing Agreement</h2>
+
+        <p class="hint">
+          Created an agreement earlier but did not fund it? Enter its ID to
+          finish funding. Only the Shipper who created it can fund it, and only
+          while it is still in the Created state.
+        </p>
+
+        <div class="lookup-row">
+          <input
+            type="number"
+            id="resumeId"
+            min="1"
+            step="1"
+            placeholder="Agreement ID, e.g. 7"
+          />
+
+          <button type="button" id="resumeLookupBtn">Look Up</button>
+        </div>
+
+        <div id="resumeDetail" style="display: none">
+          <p id="resumeSummary" class="hint"></p>
+
+          <div class="form-group">
+            <label for="resumeAmount">Amount to Fund (ETH)</label>
+
+            <input
+              type="number"
+              id="resumeAmount"
+              min="0.000001"
+              step="any"
+              placeholder="Must match the payload value"
+            />
+          </div>
+
+          <button type="button" id="resumeFundBtn">Fund Agreement</button>
+        </div>
+
+        <p id="resumeStatusMessage" role="status" aria-live="polite"></p>
+      </section>
+
       <!-- Success Result -->
       <section class="card" id="successCard" style="display: none">
         <h2>Agreement Created Successfully</h2>
@@ -341,8 +387,16 @@
           roleWarning.style.display = "none";
 
           createCard.style.display = "block";
+
+          // A Shipper may have an agreement left unfunded from an earlier
+          // visit, so this stays available rather than only appearing after a
+          // creation in this page session.
+          resumeCard.style.display = "block";
+          applyFundQueryParam();
         } else {
           createCard.style.display = "none";
+
+          resumeCard.style.display = "none";
 
           roleWarning.style.display = "block";
         }
@@ -446,57 +500,170 @@
       });
 
       // Fund the agreement just created
-      fundBtn.addEventListener("click", async () => {
-        if (lastCreatedAgreementId === null) {
-          setFundStatus(
-            "No agreement to fund yet — create one first.",
-            "error",
-          );
-
+      /**
+       * Sends the funding transaction for one agreement.
+       *
+       * Both the post-creation panel and the "fund an existing agreement" card
+       * call this, so there is a single funding code path rather than two that
+       * can drift apart.
+       */
+      async function submitFunding(agreementId, amount, btn, input, setStatus) {
+        if (agreementId === null || agreementId === undefined) {
+          setStatus("No agreement selected to fund.", "error");
           return;
         }
-
-        const amount = fundAmountInput.value;
 
         if (!amount || Number(amount) <= 0) {
-          setFundStatus("Enter a valid ETH amount to fund.", "error");
-
+          setStatus("Enter a valid ETH amount to fund.", "error");
           return;
         }
 
+        const originalLabel = btn.textContent;
+
         try {
-          fundBtn.disabled = true;
+          btn.disabled = true;
+          if (input) input.disabled = true;
+          btn.textContent = "Funding...";
 
-          fundAmountInput.disabled = true;
-
-          fundBtn.textContent = "Funding...";
-
-          setFundStatus("Please confirm the transaction in MetaMask.", "");
+          setStatus("Please confirm the transaction in MetaMask.", "");
 
           const c = getContract();
 
-          const tx = await c.fundAgreement(lastCreatedAgreementId, {
+          const tx = await c.fundAgreement(agreementId, {
             value: ethers.parseEther(amount.toString()),
           });
 
           await tx.wait();
 
-          setFundStatus(
-            "Agreement funded successfully. You can now set up its milestones from the Milestones tab.",
+          setStatus(
+            `Agreement #${agreementId} funded successfully. You can now set up its milestones from the Milestones tab.`,
             "success",
           );
+          return true;
         } catch (error) {
           console.error("Fund agreement error:", error);
 
-          setFundStatus(describeError(error), "error");
+          setStatus(describeError(error), "error");
+          return false;
         } finally {
-          fundBtn.disabled = false;
-
-          fundAmountInput.disabled = false;
-
-          fundBtn.textContent = "Fund Agreement";
+          btn.disabled = false;
+          if (input) input.disabled = false;
+          btn.textContent = originalLabel;
         }
+      }
+
+      fundBtn.addEventListener("click", () =>
+        submitFunding(
+          lastCreatedAgreementId,
+          fundAmountInput.value,
+          fundBtn,
+          fundAmountInput,
+          setFundStatus,
+        ),
+      );
+
+      // ---------------------------------------------------------------
+      // Fund an agreement created earlier.
+      //
+      // lastCreatedAgreementId only survives while this page stays loaded, so
+      // navigating away used to leave an agreement stuck in Created with no
+      // route back to funding it. The contract is happy to fund it — only the
+      // interface had lost the reference. This card restores that route.
+      // ---------------------------------------------------------------
+
+      const resumeCard = document.getElementById("resumeCard");
+      const resumeIdInput = document.getElementById("resumeId");
+      const resumeLookupBtn = document.getElementById("resumeLookupBtn");
+      const resumeDetail = document.getElementById("resumeDetail");
+      const resumeSummary = document.getElementById("resumeSummary");
+      const resumeAmount = document.getElementById("resumeAmount");
+      const resumeFundBtn = document.getElementById("resumeFundBtn");
+      const resumeStatus = document.getElementById("resumeStatusMessage");
+
+      let resumeAgreementId = null;
+
+      function setResumeStatus(text, kind) {
+        resumeStatus.textContent = text;
+        resumeStatus.className = kind ? `status-${kind}` : "";
+      }
+
+      async function lookupAgreementToFund(rawId) {
+        const id = Number(rawId);
+
+        resumeDetail.style.display = "none";
+        resumeAgreementId = null;
+
+        if (!rawId || !Number.isInteger(id) || id < 1) {
+          setResumeStatus("Enter a valid agreement ID.", "error");
+          return;
+        }
+
+        setResumeStatus("Looking up agreement...", "");
+
+        let agreement;
+        try {
+          agreement = await getAgreement(id);
+        } catch (error) {
+          console.warn("Agreement lookup failed:", error);
+          setResumeStatus(
+            `Agreement #${id} could not be read — check the ID exists.`,
+            "error",
+          );
+          return;
+        }
+
+        // Validate here rather than letting the transaction revert, so a wrong
+        // ID costs the user nothing.
+        const account = (getCurrentAccount() || "").toLowerCase();
+
+        if (agreement.statusCode !== 0) {
+          setResumeStatus(
+            `Agreement #${id} is already ${agreement.statusLabel}. Only an agreement still in Created can be funded.`,
+            "error",
+          );
+          return;
+        }
+
+        if (agreement.shipper.toLowerCase() !== account) {
+          setResumeStatus(
+            `Agreement #${id} belongs to a different Shipper (${agreement.shipper}). Only that wallet can fund it.`,
+            "error",
+          );
+          return;
+        }
+
+        resumeAgreementId = id;
+        resumeAmount.value = agreement.payloadValueEth;
+        resumeSummary.textContent = `Agreement #${id} — ${agreement.payloadValueEth} ETH across ${agreement.milestoneCount} milestone${agreement.milestoneCount === 1 ? "" : "s"}, carrier ${agreement.carrier}.`;
+        resumeDetail.style.display = "block";
+        setResumeStatus("Ready to fund.", "success");
+      }
+
+      resumeLookupBtn.addEventListener("click", () =>
+        lookupAgreementToFund(resumeIdInput.value),
+      );
+
+      resumeFundBtn.addEventListener("click", async () => {
+        const funded = await submitFunding(
+          resumeAgreementId,
+          resumeAmount.value,
+          resumeFundBtn,
+          resumeAmount,
+          setResumeStatus,
+        );
+        if (funded) resumeDetail.style.display = "none";
       });
+
+      // Allow linking straight to a specific agreement, e.g. from the
+      // Dashboard: create.html?fund=7
+      function applyFundQueryParam() {
+        const requested = new URLSearchParams(window.location.search).get(
+          "fund",
+        );
+        if (!requested) return;
+        resumeIdInput.value = requested;
+        lookupAgreementToFund(requested);
+      }
 
       // Let the user create a second agreement without reloading the page
       createAnotherBtn.addEventListener("click", () => {

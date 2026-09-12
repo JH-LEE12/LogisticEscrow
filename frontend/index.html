@@ -176,6 +176,16 @@
               )})</dd>
             </dl>
             <p class="hint">
+              ${
+                // statusCode 0 is Created, i.e. not yet funded. Only that
+                // agreement's own Shipper can fund it, so the link is offered
+                // only when both hold.
+                a.statusCode === 0 &&
+                a.shipper.toLowerCase() ===
+                  (getCurrentAccount() || "").toLowerCase()
+                  ? `<a href="create.html?fund=${a.id}"><strong>Fund this agreement</strong></a> &nbsp;·&nbsp;`
+                  : ""
+              }
               <a href="milestones.html">Manage milestones</a> &nbsp;·&nbsp;
               <a href="history.html">View full on-chain timeline</a>
             </p>
