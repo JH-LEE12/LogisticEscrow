@@ -562,3 +562,17 @@ table.agreements tr.agreement-detail > td {
   min-width: 68px;
   color: var(--color-steel);
 }
+
+/* Fiat estimate on create.html — append these to the end of style.css.
+   Shown under each ETH amount field. Stays empty when the price feed is
+   unavailable, so it must not reserve space or draw a box when blank. */
+
+.fiat-estimate {
+  margin: 4px 0 0;
+  font-size: 0.82rem;
+  color: var(--color-steel);
+}
+
+.fiat-estimate:empty {
+  display: none;
+}

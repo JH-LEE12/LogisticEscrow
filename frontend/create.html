@@ -117,6 +117,8 @@
               <p class="hint">
                 Total shipment value. You fund this amount in a later step.
               </p>
+
+              <p class="fiat-estimate" id="payloadFiat"></p>
             </div>
 
             <!-- Milestones -->
@@ -195,6 +197,8 @@
               step="any"
               placeholder="Must match the payload value"
             />
+
+            <p class="fiat-estimate" id="resumeAmountFiat"></p>
           </div>
 
           <button type="button" id="resumeFundBtn">Fund Agreement</button>
@@ -252,6 +256,8 @@
             step="any"
             placeholder="Must match the payload value"
           />
+
+          <p class="fiat-estimate" id="fundAmountFiat"></p>
         </div>
 
         <button type="button" id="fundBtn">Fund Agreement</button>
@@ -682,8 +688,98 @@
         document.getElementById("carrierAddress").focus();
       });
 
+      // ---------------------------------------------------------------
+      // Indicative fiat value for the ETH amounts on this page.
+      //
+      // Fetched client-side from CoinGecko's public endpoint — no API key and
+      // no backend, which keeps the platform's "no server" property intact.
+      // This is the only off-chain data source in the whole system.
+      //
+      // Note this is the MAINNET price. The contract runs on Sepolia, whose
+      // ETH is valueless faucet currency, so the figure is a real-world
+      // reference for the size of the amount, not what the escrow is worth.
+      // The label says so.
+      // ---------------------------------------------------------------
+
+      const PRICE_URL =
+        "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd,myr";
+
+      // null until the first successful fetch; stays null if it never succeeds,
+      // in which case every estimate line simply stays empty.
+      let ethRate = null;
+
+      const fiatTargets = [
+        ["payloadValue", "payloadFiat"],
+        ["fundAmount", "fundAmountFiat"],
+        ["resumeAmount", "resumeAmountFiat"],
+      ];
+
+      const money = (value, currency) =>
+        value.toLocaleString(undefined, {
+          style: "currency",
+          currency,
+          maximumFractionDigits: 2,
+        });
+
+      function renderFiatEstimate(inputId, outputId) {
+        const input = document.getElementById(inputId);
+        const output = document.getElementById(outputId);
+        if (!input || !output) return;
+
+        const eth = Number(input.value);
+
+        // No rate, empty field, or nonsense input — show nothing rather than
+        // NaN. The estimate is decoration and must never get in the way.
+        if (!ethRate || !input.value || !Number.isFinite(eth) || eth <= 0) {
+          output.textContent = "";
+          return;
+        }
+
+        output.textContent = `≈ ${money(eth * ethRate.usd, "USD")} · ${money(
+          eth * ethRate.myr,
+          "MYR",
+        )} — indicative mainnet rate, Sepolia ETH has no market value`;
+      }
+
+      function refreshAllFiatEstimates() {
+        fiatTargets.forEach(([inputId, outputId]) =>
+          renderFiatEstimate(inputId, outputId),
+        );
+      }
+
+      async function loadEthRate() {
+        try {
+          const response = await fetch(PRICE_URL);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+          const data = await response.json();
+          const eth = data && data.ethereum;
+
+          if (!eth || !Number.isFinite(eth.usd) || !Number.isFinite(eth.myr)) {
+            throw new Error("Unexpected price response shape");
+          }
+
+          ethRate = { usd: eth.usd, myr: eth.myr };
+          refreshAllFiatEstimates();
+        } catch (error) {
+          // Deliberately non-fatal: log for us, show nothing to the user.
+          console.warn("ETH price unavailable — estimates hidden.", error);
+        }
+      }
+
+      fiatTargets.forEach(([inputId, outputId]) => {
+        const input = document.getElementById(inputId);
+        if (input) {
+          input.addEventListener("input", () =>
+            renderFiatEstimate(inputId, outputId),
+          );
+        }
+      });
+
       // Automatically reconnect MetaMask
       window.addEventListener("DOMContentLoaded", async () => {
+        loadEthRate(); // not awaited — the form must not wait on a price
+
         const account = await restoreSession();
 
         if (account) {
