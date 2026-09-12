@@ -141,6 +141,51 @@
         return addr.slice(0, 6) + "..." + addr.slice(-4);
       }
 
+      function describeError(error) {
+        if (error && error.code === "ACTION_REJECTED") {
+          return "Transaction cancelled in MetaMask.";
+        }
+
+        const REVERT_MESSAGES = {
+          NotShipper: "Only the Shipper of this agreement can do that.",
+          NotCarrier: "Only the Carrier of this agreement can do that.",
+          NotParticipant:
+            "Only the Shipper or Carrier of this agreement can do that.",
+          MilestoneNotSubmitted:
+            "This milestone hasn't been marked as submitted by the Carrier yet.",
+          MilestoneAlreadyPaid: "This milestone has already been paid.",
+          InvalidMilestoneConfig:
+            "The milestone amounts don't add up to the total payload value.",
+          MilestoneAlreadyRewarded:
+            "This milestone's reward has already been claimed.",
+          MilestoneNotVerified:
+            "This milestone must be verified and paid before it can be rewarded.",
+          AgreementNotCompleted:
+            "This agreement must be fully completed before claiming the bonus.",
+          CompletionAlreadyRewarded:
+            "The completion bonus for this agreement has already been claimed.",
+          DeadlineNotPassed:
+            "The deadline hasn't passed yet — refund isn't available.",
+          AlreadyFinalized:
+            "This agreement has already been settled (refunded, completed, or resolved).",
+          ContractIsPaused: "The contract is currently paused by its owner.",
+        };
+
+        const revertName =
+          (error && error.revert && error.revert.name) ||
+          (error && error.errorName);
+
+        if (revertName && REVERT_MESSAGES[revertName]) {
+          return REVERT_MESSAGES[revertName];
+        }
+
+        if (revertName) {
+          return "Transaction rejected by the contract (" + revertName + ").";
+        }
+
+        return "Transaction failed. Check that you're using the correct account for this action, and that MetaMask is on the right network.";
+      }
+
       function setCompletionStatus(text, kind) {
         completionStatusMessage.textContent = text;
         completionStatusMessage.className = kind || "";
@@ -304,9 +349,7 @@
             loadMilestones(id);
           } catch (err) {
             console.error(err);
-            alert(
-              "Error configuring milestones: " + (err.reason || err.message),
-            );
+            alert("Error configuring milestones: " + describeError(err));
           }
         });
 
@@ -320,7 +363,7 @@
           loadMilestones(agreementId);
         } catch (err) {
           console.error(err);
-          alert("Error submitting milestone: " + (err.reason || err.message));
+          alert("Error submitting milestone: " + describeError(err));
         }
       }
 
@@ -334,7 +377,7 @@
           loadMilestones(agreementId);
         } catch (err) {
           console.error(err);
-          alert("Error releasing payment: " + (err.reason || err.message));
+          alert("Error releasing payment: " + describeError(err));
         }
       }
 
@@ -359,8 +402,7 @@
           msgEl.textContent = "Rewarded!";
         } catch (err) {
           console.error(err);
-          msgEl.textContent =
-            "Error: " + (err.reason || err.errorName || err.message);
+          msgEl.textContent = "Error: " + describeError(err);
         }
       }
 
@@ -390,10 +432,7 @@
           );
         } catch (err) {
           console.error(err);
-          setCompletionStatus(
-            "Error: " + (err.reason || err.errorName || err.message),
-            "error",
-          );
+          setCompletionStatus("Error: " + describeError(err), "error");
         } finally {
           claimCompletionBtn.disabled = false;
           claimCompletionBtn.textContent = "Claim Completion Bonus";
@@ -425,10 +464,7 @@
           loadMilestones(currentAgreementId);
         } catch (err) {
           console.error(err);
-          setRefundStatus(
-            "Error: " + (err.reason || err.errorName || err.message),
-            "error",
-          );
+          setRefundStatus("Error: " + describeError(err), "error");
         } finally {
           triggerRefundBtn.disabled = false;
           triggerRefundBtn.textContent = "Check & Trigger Refund";

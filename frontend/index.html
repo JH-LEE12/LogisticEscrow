@@ -95,6 +95,26 @@
       function shortenAddress(addr) {
         return addr.slice(0, 6) + "..." + addr.slice(-4);
       }
+      function describeError(error) {
+        if (error && error.code === "ACTION_REJECTED") {
+          return "Transaction cancelled in MetaMask.";
+        }
+        const REVERT_MESSAGES = {
+          InvalidRole: "Invalid role selected.",
+          AlreadyRegistered:
+            "This wallet has already registered a role — it cannot be changed.",
+          ContractIsPaused:
+            "The contract is currently paused by its owner. Try again later.",
+        };
+        const revertName =
+          (error && error.revert && error.revert.name) ||
+          (error && error.errorName);
+        if (revertName && REVERT_MESSAGES[revertName])
+          return REVERT_MESSAGES[revertName];
+        if (revertName)
+          return "Transaction rejected by the contract (" + revertName + ").";
+        return "Registration failed. Check MetaMask is on the correct network and try again.";
+      }
 
       function renderRoleBadge(roleCode) {
         roleBadge.textContent = ROLE_LABEL[roleCode];
@@ -180,15 +200,25 @@
       document
         .getElementById("registerShipperBtn")
         .addEventListener("click", async () => {
-          await registerUser(ROLE.SHIPPER);
-          await refreshDashboard();
+          try {
+            await registerUser(ROLE.SHIPPER);
+            await refreshDashboard();
+          } catch (err) {
+            console.error(err);
+            alert("Registration failed: " + describeError(err));
+          }
         });
 
       document
         .getElementById("registerCarrierBtn")
         .addEventListener("click", async () => {
-          await registerUser(ROLE.CARRIER);
-          await refreshDashboard();
+          try {
+            await registerUser(ROLE.CARRIER);
+            await refreshDashboard();
+          } catch (err) {
+            console.error(err);
+            alert("Registration failed: " + describeError(err));
+          }
         });
 
       // Auto-reconnect on page load if MetaMask already trusts this site.
