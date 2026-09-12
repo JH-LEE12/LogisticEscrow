@@ -104,6 +104,29 @@
         if (roleCode === ROLE.CARRIER) roleBadge.classList.add("carrier");
       }
 
+      // Plain-English meaning of each AgreementStatus, so the table is readable
+      // without knowing the contract's state machine.
+      const STATUS_MEANING = [
+        "Created but not yet funded — no Ether is locked in escrow.",
+        "The Shipper has locked the full payload value into escrow.",
+        "At least one milestone has been paid; delivery is under way.",
+        "Every milestone has been paid and the agreement is finished.",
+        "The escrow was returned to the Shipper.",
+        "Frozen pending arbitration — no funds can move until it is resolved.",
+      ];
+
+      const ETHERSCAN = "https://sepolia.etherscan.io";
+
+      // Short human phrase for how far the deadline is from now.
+      function describeDeadline(deadline) {
+        const ms = deadline.getTime() - Date.now();
+        if (ms <= 0) return "deadline has passed";
+        const hours = Math.round(ms / 3600000);
+        if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} remaining`;
+        const days = Math.round(hours / 24);
+        return `${days} day${days === 1 ? "" : "s"} remaining`;
+      }
+
       function renderAgreements(agreements) {
         if (agreements.length === 0) {
           agreementsContainer.innerHTML =
@@ -112,22 +135,54 @@
         }
 
         const rows = agreements
-          .map(
-            (a) => `
-        <tr>
-          <td>#${a.id}</td>
+          .map((a) => {
+            const statusClass = a.statusLabel.replace(/\s/g, "");
+            // Summary row, then a detail row that starts hidden. Clicking the
+            // summary toggles the detail — everything shown there is already in
+            // the agreement object, so no extra contract calls are needed.
+            return `
+        <tr class="agreement-row" data-id="${a.id}" title="Click to show details">
+          <td><span class="caret" id="caret-${a.id}">&#9656;</span> #${a.id}</td>
           <td>${shortenAddress(a.shipper)}</td>
           <td>${shortenAddress(a.carrier)}</td>
           <td>${a.payloadValueEth} ETH</td>
           <td>${a.milestoneCount}</td>
           <td>${a.deadline.toLocaleDateString()}</td>
-          <td><span class="status-pill status-${a.statusLabel.replace(
-            /\s/g,
-            "",
-          )}">${a.statusLabel}</span></td>
+          <td><span class="status-pill status-${statusClass}">${
+            a.statusLabel
+          }</span></td>
         </tr>
-      `,
-          )
+        <tr class="agreement-detail" id="detail-${a.id}" hidden>
+          <td colspan="7">
+            <p class="detail-status"><strong>${a.statusLabel}</strong> — ${
+              STATUS_MEANING[a.statusCode] ?? ""
+            }</p>
+            <dl class="detail-grid">
+              <dt>Shipper</dt>
+              <dd><a href="${ETHERSCAN}/address/${a.shipper}" target="_blank"
+                     rel="noopener">${a.shipper}</a></dd>
+              <dt>Carrier</dt>
+              <dd><a href="${ETHERSCAN}/address/${a.carrier}" target="_blank"
+                     rel="noopener">${a.carrier}</a></dd>
+              <dt>Payload value</dt>
+              <dd>${a.payloadValueEth} ETH across ${a.milestoneCount} milestone${
+                a.milestoneCount === 1 ? "" : "s"
+              }</dd>
+              <dt>Created</dt>
+              <dd>${a.createdAt.toLocaleString()}</dd>
+              <dt>Deadline</dt>
+              <dd>${a.deadline.toLocaleString()} (${describeDeadline(
+                a.deadline,
+              )})</dd>
+            </dl>
+            <p class="hint">
+              <a href="milestones.html">Manage milestones</a> &nbsp;·&nbsp;
+              <a href="history.html">View full on-chain timeline</a>
+            </p>
+          </td>
+        </tr>
+      `;
+          })
           .join("");
 
         agreementsContainer.innerHTML = `
@@ -140,7 +195,22 @@
           </thead>
           <tbody>${rows}</tbody>
         </table>
+        <p class="hint">Click any agreement to see its full details.</p>
       `;
+
+        // Wire up the toggles after the rows exist.
+        agreementsContainer
+          .querySelectorAll(".agreement-row")
+          .forEach((row) => {
+            row.addEventListener("click", () => {
+              const id = row.dataset.id;
+              const detail = document.getElementById(`detail-${id}`);
+              const caret = document.getElementById(`caret-${id}`);
+              if (!detail) return;
+              detail.hidden = !detail.hidden;
+              if (caret) caret.innerHTML = detail.hidden ? "&#9656;" : "&#9662;";
+            });
+          });
       }
 
       async function refreshDashboard() {

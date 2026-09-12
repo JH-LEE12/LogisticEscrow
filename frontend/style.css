@@ -468,3 +468,97 @@ table.agreements th {
   letter-spacing: 0.03em;
   margin-top: 4px;
 }
+
+/* Dashboard agreement detail additions — append these to the end of style.css.
+   Uses the same CSS variables already defined at the top of style.css.
+   Each agreement row in index.html is followed by a hidden detail row that
+   the row's click handler toggles. */
+
+.agreement-row {
+  cursor: pointer;
+}
+
+.agreement-row:hover {
+  background: var(--color-mist);
+}
+
+.caret {
+  color: var(--color-steel);
+  font-size: 0.8em;
+}
+
+/* Needs to out-specify `table.agreements th, table.agreements td` further up,
+   which sets the compact 10px/12px padding used by the summary rows. */
+table.agreements tr.agreement-detail > td {
+  background: var(--color-mist);
+  padding: 16px 20px;
+}
+
+.detail-status {
+  margin: 0 0 12px;
+  color: var(--color-navy);
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 20px;
+  margin: 0 0 12px;
+  font-size: 0.92em;
+}
+
+.detail-grid dt {
+  color: var(--color-steel);
+}
+
+.detail-grid dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  word-break: break-all;
+}
+
+/* History transaction detail additions — append these to the end of style.css.
+   Each timeline entry in history.html carries a plain-English description and
+   a collapsible block showing the on-chain receipt for that event. */
+
+.timeline-body .meaning {
+  color: var(--color-steel);
+  font-size: 0.9em;
+  margin: 4px 0 8px;
+  max-width: 60ch;
+}
+
+.detail-toggle {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-steel);
+  font-family: var(--font-body);
+  font-size: 0.85em;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.detail-toggle:hover {
+  color: var(--color-navy);
+}
+
+.tx-detail {
+  margin-top: 8px;
+  padding: 10px 14px;
+  background: var(--color-mist);
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+}
+
+.tx-detail p {
+  margin: 3px 0;
+  word-break: break-all;
+}
+
+.tx-detail span {
+  display: inline-block;
+  min-width: 68px;
+  color: var(--color-steel);
+}

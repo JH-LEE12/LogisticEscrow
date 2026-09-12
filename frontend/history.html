@@ -99,6 +99,44 @@
         lookupCard.style.display = "block";
       }
 
+      const ETHERSCAN = "https://sepolia.etherscan.io";
+
+      // What each status actually means, indexed by AgreementStatus. Shown
+      // under the heading so the timeline reads without knowing the contract.
+      const STATUS_MEANING = [
+        "The agreement has been recorded on-chain, but no Ether is locked yet.",
+        "The Shipper has locked the full payload value into escrow. Nothing can be withdrawn except by the encoded rules.",
+        "A milestone has been verified and paid, so delivery is under way and the escrow is partially released.",
+        "Every milestone has been paid out and the agreement has concluded successfully.",
+        "The escrow was returned in full to the Shipper.",
+        "The agreement is frozen pending arbitration. No funds can move until the arbitrator resolves it.",
+      ];
+
+      // Collapsible block carrying the on-chain receipt for one entry. The log
+      // already has both fields, so this costs no extra network calls.
+      let detailSeq = 0;
+      function txDetail(log) {
+        const id = `txd-${detailSeq++}`;
+        return `
+          <button type="button" class="detail-toggle"
+                  onclick="toggleDetail('${id}', this)">Show transaction detail</button>
+          <div class="tx-detail" id="${id}" hidden>
+            <p><span>Block</span> ${log.blockNumber}</p>
+            <p><span>Tx hash</span> ${log.transactionHash}</p>
+            <p><a href="${ETHERSCAN}/tx/${log.transactionHash}"
+                  target="_blank" rel="noopener">Verify on Etherscan &#8599;</a></p>
+          </div>`;
+      }
+
+      function toggleDetail(id, btn) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.hidden = !el.hidden;
+        btn.textContent = el.hidden
+          ? "Show transaction detail"
+          : "Hide transaction detail";
+      }
+
       async function renderEvent(kind, log) {
         const block = await provider.getBlock(log.blockNumber);
         const timestamp = new Date(
@@ -115,6 +153,8 @@
           <div class="timeline-body">
             <h3>${label}</h3>
             <p>${timestamp}</p>
+            <p class="meaning">${STATUS_MEANING[statusCode] ?? ""}</p>
+            ${txDetail(log)}
           </div>
         </div>`;
         }
@@ -128,6 +168,8 @@
             <p>By ${shortenAddress(log.args.raisedBy)} — "${
             log.args.reason
           }" · ${timestamp}</p>
+            <p class="meaning">A participant escalated this agreement for arbitration. It is now frozen until the designated arbitrator decides how the escrow is split.</p>
+            ${txDetail(log)}
           </div>
         </div>`;
         }
@@ -141,6 +183,8 @@
             <p>${ethers.formatEther(log.args.amount)} ETH to ${shortenAddress(
             log.args.shipper,
           )} · ${timestamp}</p>
+            <p class="meaning">The deadline passed while the agreement was still funded and no milestone had been paid, so the contract returned the full escrow to the Shipper automatically.</p>
+            ${txDetail(log)}
           </div>
         </div>`;
         }
@@ -156,6 +200,8 @@
             )} ETH shipper / ${ethers.formatEther(
             log.args.toCarrier,
           )} ETH carrier · ${timestamp}</p>
+            <p class="meaning">The arbitrator decided the final division of the escrow. The agreement is now settled and cannot be finalised again.</p>
+            ${txDetail(log)}
           </div>
         </div>`;
         }
