@@ -640,7 +640,11 @@
 
         resumeAgreementId = id;
         resumeAmount.value = agreement.payloadValueEth;
-        resumeSummary.textContent = `Agreement #${id} — ${agreement.payloadValueEth} ETH across ${agreement.milestoneCount} milestone${agreement.milestoneCount === 1 ? "" : "s"}, carrier ${agreement.carrier}.`;
+        resumeSummary.textContent = `Agreement #${id} — ${
+          agreement.payloadValueEth
+        } ETH across ${agreement.milestoneCount} milestone${
+          agreement.milestoneCount === 1 ? "" : "s"
+        }, carrier ${agreement.carrier}.`;
         resumeDetail.style.display = "block";
         setResumeStatus("Ready to fund.", "success");
       }
